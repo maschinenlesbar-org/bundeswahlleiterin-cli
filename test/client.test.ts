@@ -29,6 +29,7 @@ test("results() filters by area-type, area (number+name), party, vote and group-
   assert.equal((await c().results({ areaType: "Bund" })).length, 2);
   assert.equal((await c().results({ areaType: "Wahlkreis" })).length, 2);
   assert.equal((await c().results({ area: "005" })).length, 2); // Kiel by number
+  assert.equal((await c().results({ area: "5" })).length, 2); // ...and leading-zero-insensitive
   assert.equal((await c().results({ area: "kiel" })).length, 2); // Kiel by name (ci)
   assert.equal((await c().results({ party: "grüne" })).length, 2); // ci substring
   assert.equal((await c().results({ vote: 1 })).length, 2);
@@ -63,6 +64,7 @@ test("wahlkreise() hits its path and filters by Land (name, abbreviation, number
   assert.equal((await c().wahlkreise({ land: "Bayern" })).length, 1);
   assert.equal((await c().wahlkreise({ land: "BY" })).length, 1); // abbreviation
   assert.equal((await c().wahlkreise({ land: "01" })).length, 2); // Land number
+  assert.equal((await c().wahlkreise({ land: "9" })).length, 1); // ...leading-zero-insensitive (09)
   assert.equal((await c().wahlkreise({ land: "schleswig" })).length, 2); // name substring (ci)
 });
 

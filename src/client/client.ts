@@ -41,6 +41,16 @@ function includesCi(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.trim().toLowerCase());
 }
 
+/** True when the value is a plain run of digits (a bare area/Land number). */
+function isNumeric(value: string): boolean {
+  return /^\d+$/.test(value.trim());
+}
+
+/** Compare two area/Land numbers ignoring leading zeros, so "005" == "5". */
+function sameNumber(a: string, b: string): boolean {
+  return a.trim().replace(/^0+/, "") === b.trim().replace(/^0+/, "");
+}
+
 /** Build a header-name → column-index lookup so mapping survives column reordering. */
 function indexMap(header: string[]): (name: string) => number {
   const map = new Map(header.map((h, i) => [h, i]));
@@ -94,8 +104,12 @@ export class BundeswahlClient {
 
     if (query.areaType) rows = rows.filter((r) => r.gebietsart === query.areaType);
     if (query.area !== undefined) {
-      const a = query.area;
-      rows = rows.filter((r) => r.gebietsnummer === a.trim() || includesCi(r.gebietsname, a));
+      // A bare number matches the area number ignoring leading zeros ("5" == "005");
+      // anything else is a case-insensitive name substring.
+      const a = query.area.trim();
+      rows = isNumeric(a)
+        ? rows.filter((r) => sameNumber(r.gebietsnummer, a))
+        : rows.filter((r) => includesCi(r.gebietsname, a));
     }
     if (query.party !== undefined) rows = rows.filter((r) => includesCi(r.gruppenname, query.party!));
     if (query.vote !== undefined) rows = rows.filter((r) => r.stimme === (query.vote as Vote));
@@ -130,9 +144,13 @@ export class BundeswahlClient {
       landAbk: cell(r, at("LAND_ABK")),
     }));
     if (opts.land !== undefined) {
-      const l = opts.land;
-      rows = rows.filter(
-        (w) => includesCi(w.landName, l) || w.landAbk.toLowerCase() === l.trim().toLowerCase() || w.landNr === l.trim(),
+      // A bare number matches the Land number ignoring leading zeros ("9" == "09");
+      // anything else matches the Land name (substring) or its abbreviation.
+      const l = opts.land.trim();
+      rows = rows.filter((w) =>
+        isNumeric(l)
+          ? sameNumber(w.landNr, l)
+          : includesCi(w.landName, l) || w.landAbk.toLowerCase() === l.toLowerCase(),
       );
     }
     return rows;
