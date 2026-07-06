@@ -120,6 +120,11 @@ export class BundeswahlClient {
       };
     });
 
+    // Drop malformed/truncated lines: a real result row always names a group, so a
+    // row with no `gruppenname` is not a data row (a ghost from a short line — which
+    // also lacks the columns before it, so this one check is enough).
+    rows = rows.filter((r) => r.gruppenname !== "");
+
     if (query.areaType) rows = rows.filter((r) => r.gebietsart === query.areaType);
     if (query.area !== undefined) {
       // A bare number matches the area number ignoring leading zeros ("5" == "005");

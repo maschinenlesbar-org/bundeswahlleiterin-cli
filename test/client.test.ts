@@ -40,6 +40,14 @@ test("results() filters by area-type, area (number+name), party, vote and group-
   assert.equal((await c().results({ party: "nonesuch" })).length, 0);
 });
 
+test("results() drops truncated rows that name no group (F4)", async () => {
+  const mt = makeMockTransport(() => csvResponse(fx.kerg2Csv));
+  const c = new BundeswahlClient({ transport: mt.transport });
+  const rows = await c.results();
+  assert.ok(rows.every((r) => r.gruppenname !== ""));
+  assert.ok(!rows.some((r) => r.gebietsname === "Ragged"));
+});
+
 test("results() carries the Gewählt winner name on Wahlkreis rows", async () => {
   const mt = makeMockTransport(() => csvResponse(fx.kerg2Csv));
   const c = new BundeswahlClient({ transport: mt.transport });
