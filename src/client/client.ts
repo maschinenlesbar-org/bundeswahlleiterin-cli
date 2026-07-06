@@ -26,6 +26,11 @@ import type {
  * at a stable directory path; the reference datasets are behind opaque `dam/jcr`
  * UUIDs that are fixed for this (completed) election, so they are pinned here.
  * Source: https://www.bundeswahlleiterin.de/bundestagswahlen/2025/ergebnisse/opendata.html
+ *
+ * MAINTENANCE: if the Bundeswahlleiterin reorganises the open-data section these
+ * `dam/jcr` paths can 404 (surfaced as exit 4) or, worse, resolve to a *different*
+ * 200 file — in which case `parseDataset`'s header check raises a clear error rather
+ * than returning empty data. Re-pin the UUIDs from the opendata page if that happens.
  */
 export const BTW2025 = {
   results: "/bundestagswahlen/2025/ergebnisse/opendata/btw25/csv/kerg2.csv",
