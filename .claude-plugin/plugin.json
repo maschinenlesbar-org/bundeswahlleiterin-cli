@@ -1,0 +1,22 @@
+{
+  "name": "bundeswahl",
+  "version": "0.1.0",
+  "description": "German federal election (Bundestagswahl 2025) skills powered by the bundeswahlleiterin-cli — results, parties, constituencies and structural data (open data).",
+  "author": {
+    "name": "Sebastian Schürmann",
+    "email": "sebs@2xs.org"
+  },
+  "license": "AGPL-3.0-or-later",
+  "repository": "https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli",
+  "homepage": "https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli#readme",
+  "keywords": [
+    "bundeswahlleiterin",
+    "bundestagswahl",
+    "wahl",
+    "election",
+    "wahlkreis",
+    "germany",
+    "opendata",
+    "bund.dev"
+  ]
+}

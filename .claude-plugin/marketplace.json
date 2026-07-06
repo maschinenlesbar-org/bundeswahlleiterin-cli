@@ -1,0 +1,36 @@
+{
+  "name": "bundeswahl-skills",
+  "owner": {
+    "name": "Sebastian Schürmann",
+    "email": "sebs@2xs.org"
+  },
+  "metadata": {
+    "description": "German federal election (Bundestagswahl 2025) skills powered by the bundeswahlleiterin-cli — results, parties, constituencies and structural data (open data)"
+  },
+  "plugins": [
+    {
+      "name": "bundeswahl",
+      "source": "./",
+      "description": "Query the official Bundestagswahl 2025 result — first/second votes by Bund, Land or Wahlkreis, filtered by party — plus the parties, the 299 constituencies and structural data, via the bundeswahlleiterin-cli. Open data (Datenlizenz Deutschland).",
+      "version": "0.1.0",
+      "author": {
+        "name": "Sebastian Schürmann",
+        "email": "sebs@2xs.org"
+      },
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli",
+      "homepage": "https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli#readme",
+      "category": "government",
+      "keywords": [
+        "bundeswahlleiterin",
+        "bundestagswahl",
+        "wahl",
+        "election",
+        "wahlkreis",
+        "germany",
+        "opendata",
+        "bund.dev"
+      ]
+    }
+  ]
+}
