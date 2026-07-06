@@ -38,7 +38,8 @@ export const structureCsv =
   "Spalten-Nr.;;;1;2\n" +
   "Land;Wahlkreis-Nr.;Wahlkreis-Name;Fläche (km²);Bevölkerung\n" +
   "Schleswig-Holstein;1;Flensburg – Schleswig;2128,1;301,2\n" +
-  "Bayern;212;München-Nord;100,0;250,0\n";
+  "Bayern;212;München-Nord;100,0;250,0\n" +
+  "Schleswig-Holstein;901;Land insgesamt;15804,3;2953,3\n"; // an aggregate row (dropped)
 
 /** A minimal HTML error page (what the site returns for an unknown path). */
 export const htmlShell = "<!doctype html>\n<html><head><title>404</title></head><body>Not found</body></html>";

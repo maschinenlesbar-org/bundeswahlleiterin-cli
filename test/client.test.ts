@@ -83,7 +83,8 @@ test("structure() hits its path and filters by Wahlkreis (leading zeros ignored,
   const c = new BundeswahlClient({ transport: mt.transport });
   const all = await c.structure();
   assert.equal(pathOf(mt.last().url), BTW2025.structure);
-  assert.equal(all.length, 2);
+  assert.equal(all.length, 2); // the "Land insgesamt" (901) aggregate row is dropped
+  assert.ok(all.every((r) => r["Wahlkreis-Nr."] !== "901"));
   assert.equal(all[0]!["Wahlkreis-Name"], "Flensburg – Schleswig");
 
   const c2 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.structureCsv)).transport });

@@ -176,13 +176,18 @@ export class BundeswahlClient {
 
   /**
    * The structural data (Strukturdaten) per Wahlkreis — ~50 demographic/economic
-   * columns exposed as a key→value map. Optionally filtered by Wahlkreis number
-   * (leading zeros ignored) or name substring.
+   * columns exposed as a key→value map, for the **299 constituencies**. The file
+   * also carries Land/Bund summary rows ("Land insgesamt", numbered 901–999); those
+   * aggregates are dropped, since this command is per-Wahlkreis. Optionally filtered
+   * by Wahlkreis number (leading zeros ignored) or name substring.
    */
   async structure(opts: { wahlkreis?: string } = {}): Promise<StructureRow[]> {
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, "Land", BTW2025.structure);
-    let rows = rowsToObjects(parsed);
+    let rows = rowsToObjects(parsed).filter((r) => {
+      const nr = (r["Wahlkreis-Nr."] ?? "").trim();
+      return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= 299;
+    });
     if (opts.wahlkreis !== undefined) {
       const w = opts.wahlkreis.trim();
       const wNum = w.replace(/^0+/, "");

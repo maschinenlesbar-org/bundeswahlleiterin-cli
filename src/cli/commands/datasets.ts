@@ -64,7 +64,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
 
   program
     .command("structure")
-    .description("Structural data (Strukturdaten) per Wahlkreis")
+    .description("Structural data (Strukturdaten) for the 299 Wahlkreise (Land/Bund summaries excluded)")
     .option("--wahlkreis <nr-or-name>", "one Wahlkreis by number (leading zeros ignored) or name substring", parseNonEmpty)
     .action(
       action(deps, async ({ client, global, opts }) => {
