@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BundeswahlClient, BTW2025 } from "../src/client/client.js";
+import { BundeswahlParseError } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -44,6 +45,15 @@ test("results() carries the Gewählt winner name on Wahlkreis rows", async () =>
   const c = new BundeswahlClient({ transport: mt.transport });
   const kiel = (await c.results({ areaType: "Wahlkreis" }));
   assert.ok(kiel.every((r) => r.gewaehlt === "GRÜNE"));
+});
+
+test("a 200 body without the expected header throws, rather than returning []", async () => {
+  const mt = makeMockTransport(() => csvResponse("# only comments\nFoo;Bar\n1;2\n"));
+  const c = new BundeswahlClient({ transport: mt.transport });
+  await assert.rejects(
+    () => c.parties(),
+    (err) => err instanceof BundeswahlParseError && /expected header/i.test(err.message),
+  );
 });
 
 test("parties() hits its path and maps the columns", async () => {

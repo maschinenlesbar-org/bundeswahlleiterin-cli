@@ -9,7 +9,8 @@
 //   await c.wahlkreise({ land: "Bayern" });
 
 import { RequestEngine, type EngineOptions } from "./engine.js";
-import { parseCsv, parseGermanNumber, rowsToObjects } from "./csv.js";
+import { parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
+import { BundeswahlParseError } from "./errors.js";
 import type {
   AreaType,
   Party,
@@ -62,6 +63,23 @@ function cell(row: string[], at: number): string {
   return at >= 0 ? (row[at] ?? "").trim() : "";
 }
 
+/**
+ * `parseCsv`, but fail loudly if the expected header row is not found. Without
+ * this, a `200` response that isn't the expected file (a replaced/moved dataset,
+ * or an upstream column rename) would yield an empty header and the command would
+ * silently return `[]` — indistinguishable from "no matches".
+ */
+function parseDataset(text: string, headerFirstCell: string, path: string): ParsedCsv {
+  const parsed = parseCsv(text, { headerFirstCell });
+  if (parsed.header.length === 0) {
+    throw new BundeswahlParseError(
+      `Could not find the expected header ("${headerFirstCell}") in ${path} — ` +
+        "the open-data file format may have changed.",
+    );
+  }
+  return parsed;
+}
+
 export class BundeswahlClient {
   private readonly engine: RequestEngine;
 
@@ -75,7 +93,7 @@ export class BundeswahlClient {
    */
   async results(query: ResultsQuery = {}): Promise<ResultRow[]> {
     const text = await this.engine.getText(BTW2025.results);
-    const parsed = parseCsv(text, { headerFirstCell: "Wahlart" });
+    const parsed = parseDataset(text, "Wahlart", BTW2025.results);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<ResultRow>((r) => {
       const stimmeRaw = cell(r, at("Stimme"));
@@ -120,7 +138,7 @@ export class BundeswahlClient {
   /** The parties / groups reference list (btw25_parteien). */
   async parties(): Promise<Party[]> {
     const text = await this.engine.getText(BTW2025.parties);
-    const parsed = parseCsv(text, { headerFirstCell: "Gruppenschluessel" });
+    const parsed = parseDataset(text, "Gruppenschluessel", BTW2025.parties);
     const at = indexMap(parsed.header);
     return parsed.rows.map<Party>((r) => ({
       gruppenschluessel: cell(r, at("Gruppenschluessel")),
@@ -134,7 +152,7 @@ export class BundeswahlClient {
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
   async wahlkreise(opts: { land?: string } = {}): Promise<Wahlkreis[]> {
     const text = await this.engine.getText(BTW2025.wahlkreise);
-    const parsed = parseCsv(text, { headerFirstCell: "WKR_NR" });
+    const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<Wahlkreis>((r) => ({
       nr: cell(r, at("WKR_NR")),
@@ -163,7 +181,7 @@ export class BundeswahlClient {
    */
   async structure(opts: { wahlkreis?: string } = {}): Promise<StructureRow[]> {
     const text = await this.engine.getText(BTW2025.structure);
-    const parsed = parseCsv(text, { headerFirstCell: "Land" });
+    const parsed = parseDataset(text, "Land", BTW2025.structure);
     let rows = rowsToObjects(parsed);
     if (opts.wahlkreis !== undefined) {
       const w = opts.wahlkreis.trim();
