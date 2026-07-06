@@ -120,6 +120,12 @@ export class RequestEngine {
    * common non-CSV replies: an HTML error page (wrong path / the file moved) and
    * an empty body — both surface as a clear BundeswahlParseError rather than
    * reaching the CSV parser.
+   *
+   * NOTE: the response Content-Type is intentionally *ignored*. The site/CDN serves
+   * the CSVs with varying types (text/csv, text/plain, application/octet-stream), so
+   * we sniff the body — an `<!doctype html>` / `<html>` prefix is the HTML guard —
+   * rather than trust the header. Don't "harden" this into Content-Type validation;
+   * it would reject valid files.
    */
   async getText(path: string, query?: QueryParams): Promise<string> {
     const res = await this.request(path, query);
