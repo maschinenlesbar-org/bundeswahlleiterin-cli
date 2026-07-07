@@ -43,6 +43,29 @@ export interface EngineOptions {
 
 const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Strip control characters out of a string that originates in an
+ * attacker-controlled response — here, the non-2xx error `detail` snippet, which
+ * ends up in a `BundeswahlApiError.message` that run.ts prints raw to stderr.
+ * Without this, a hostile or MITM'd endpoint could return a 4xx/5xx body carrying
+ * ANSI/OSC escape sequences (retitle the window, clear the screen, spoof output)
+ * that reach the user's terminal. The stdout data path is already safe because
+ * JSON.stringify escapes control characters.
+ *
+ * Removes all C0 controls except tab (0x09) and newline (0x0a), the C1 range, and
+ * DEL (0x7f). Written with codePointAt rather than a control-char regex literal so
+ * the source file stays free of raw control bytes.
+ */
+function sanitizeServerText(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    const n = ch.codePointAt(0) ?? 0;
+    if (n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f)) continue;
+    out += ch;
+  }
+  return out;
+}
+
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -148,9 +171,14 @@ export class RequestEngine {
     // The site serves HTML error pages, not a structured envelope; include a short,
     // whitespace-collapsed snippet only when the body is plain (non-HTML) text.
     const trimmed = text.trim();
+    // `detail` is a snippet of the attacker-controlled response body that flows
+    // into the error message printed to stderr. Whitespace-collapse handles
+    // tab/newline, but ESC (0x1b) and other non-\s control bytes are not covered
+    // by `\s+`; sanitizeServerText strips them so no terminal escape sequence
+    // reaches the user's terminal.
     const detail =
       trimmed && !/^<!doctype html|^<html/i.test(trimmed)
-        ? trimmed.replace(/\s+/g, " ").slice(0, 200)
+        ? sanitizeServerText(trimmed.replace(/\s+/g, " ").slice(0, 200))
         : undefined;
     return new BundeswahlApiError({ status, url, method: "GET", body: text, detail });
   }

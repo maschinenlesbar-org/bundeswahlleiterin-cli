@@ -46,6 +46,38 @@ test("a non-2xx status maps to BundeswahlApiError with the status", async () => 
   );
 });
 
+test("the error detail is stripped of terminal control characters", async () => {
+  // Built via char codes so no raw control bytes ever appear in this source file.
+  const ESC = String.fromCharCode(0x1b);
+  const BEL = String.fromCharCode(0x07);
+  const CSI = String.fromCharCode(0x9b); // a C1 control
+  const evil = `boom${ESC}[31mred${BEL}${CSI}2J`;
+
+  const mt = makeMockTransport(() => rawResponse(evil, "text/plain", 500));
+  const e = new RequestEngine({ transport: mt.transport });
+
+  await assert.rejects(
+    () => e.getText("/x.csv"),
+    (err) => {
+      assert.ok(err instanceof BundeswahlApiError);
+      const hasControls = (s: string): boolean =>
+        [...s].some((c) => {
+          const n = c.charCodeAt(0);
+          return n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f);
+        });
+      // The control bytes are gone from both the structured detail and the
+      // human-readable message that run.ts prints to stderr...
+      assert.ok(!hasControls(err.detail ?? ""));
+      assert.ok(!hasControls(err.message));
+      // ...while the printable characters survive.
+      assert.equal(err.detail, "boom[31mred2J");
+      // The raw body is preserved untouched for programmatic access.
+      assert.equal(err.body, evil);
+      return true;
+    },
+  );
+});
+
 test("a 503 is retried up to maxRetries then surfaces", async () => {
   let calls = 0;
   const mt = makeMockTransport(() => {
