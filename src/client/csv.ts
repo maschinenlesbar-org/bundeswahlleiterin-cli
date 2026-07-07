@@ -6,6 +6,8 @@
 // escapes, and delimiters/newlines inside quotes. That is more than these files
 // need today, but keeps the parser correct if a field ever contains a `;`.
 
+import { BundeswahlParseError } from "./errors.js";
+
 /** Strip a leading UTF-8 byte-order mark, if present. */
 function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
@@ -53,6 +55,17 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
     } else {
       field += ch;
     }
+  }
+  // A quote opened but never closed means the input ended mid-field. Left
+  // unchecked, the tokenizer would have swallowed the entire remainder of the
+  // file into one field and silently dropped every following row, returning
+  // truncated data with a success exit code. Fail loudly instead — for election
+  // data, "exit 0 with a truncated result" is the worst failure mode this tool
+  // has.
+  if (inQuotes) {
+    throw new BundeswahlParseError(
+      "Malformed CSV: unterminated quoted field (a '\"' was opened but never closed) — the input is truncated or not valid CSV.",
+    );
   }
   // Flush the last field/row unless the input ended exactly on a newline.
   if (field.length > 0 || row.length > 0) {

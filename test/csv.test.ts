@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/client/csv.js";
+import { BundeswahlParseError } from "../src/client/errors.js";
 import * as fx from "./fixtures.js";
 
 test("parseCsvRows splits simple semicolon rows and ignores a trailing newline", () => {
@@ -20,6 +21,16 @@ test("parseCsvRows handles CRLF line endings", () => {
 test("parseCsvRows respects quotes: embedded delimiter, newline and \"\" escape", () => {
   const rows = parseCsvRows('x;"a;b";"line1\nline2";"he said ""hi"""\n');
   assert.deepEqual(rows, [["x", "a;b", "line1\nline2", 'he said "hi"']]);
+});
+
+test("parseCsvRows throws on an unterminated quoted field instead of truncating", () => {
+  // A single stray opening quote used to put the tokenizer into inQuotes for the
+  // rest of the file, swallowing every following row and returning partial data
+  // with a success exit code. It must now fail loudly.
+  assert.throws(
+    () => parseCsvRows('a;b\n1;2\n"broken;line\n3;4\n'),
+    (err) => err instanceof BundeswahlParseError && /unterminated quoted field/.test(err.message),
+  );
 });
 
 test("parseCsv strips the BOM and skips the preamble to the named header row", () => {
