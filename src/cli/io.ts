@@ -7,8 +7,12 @@ import type { BundeswahlClient, BundeswahlClientOptions } from "../client/client
 export interface CliIO {
   out(text: string): void;
   err(text: string): void;
-  /** Persist bytes to a file (for --output). */
-  writeFile(path: string, data: Buffer): void;
+  /**
+   * Persist bytes to a file (for --output). When `exclusive` is true the write
+   * must fail (throw, typically an `EEXIST`-coded error) rather than overwrite an
+   * existing file, so `--output` never silently clobbers the user's data.
+   */
+  writeFile(path: string, data: Buffer, exclusive: boolean): void;
 }
 
 export interface CliDeps {
@@ -20,5 +24,8 @@ export interface CliDeps {
 export const defaultIO: CliIO = {
   out: (text) => process.stdout.write(text + "\n"),
   err: (text) => process.stderr.write(text + "\n"),
-  writeFile: (path, data) => writeFileSync(path, data),
+  // "wx" opens for exclusive write: it fails with EEXIST if the file already
+  // exists, so an accidental --output never clobbers an existing file. Plain "w"
+  // (the default) truncates, used only when the caller opted into --force.
+  writeFile: (path, data, exclusive) => writeFileSync(path, data, { flag: exclusive ? "wx" : "w" }),
 };

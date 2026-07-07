@@ -86,6 +86,7 @@ export interface GlobalOptions {
   maxResponseBytes?: number;
   compact?: boolean;
   output?: string;
+  force?: boolean;
 }
 
 /** Translate resolved global CLI options into client options. */
@@ -111,8 +112,16 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
   if (global.output) {
     const data = Buffer.from(text + "\n", "utf8");
     try {
-      deps.io.writeFile(global.output, data);
+      // Refuse to overwrite an existing file unless --force: the exclusive ("wx")
+      // write throws EEXIST, which we turn into a clear, actionable message so a
+      // stray --output never silently clobbers the user's own data.
+      deps.io.writeFile(global.output, data, !global.force);
     } catch (err) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new BundeswahlError(
+          `Refusing to overwrite existing file ${global.output} — pass --force to overwrite.`,
+        );
+      }
       // A bad --output path (missing directory, a directory, no permission) is a
       // user error, not an internal fault — surface it as a clean BundeswahlError
       // instead of letting the raw fs exception hit the "Unexpected error" path.

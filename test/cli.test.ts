@@ -26,7 +26,14 @@ function makeCli(responder: (req: HttpRequest) => HttpResponse = routeFixture) {
     io: {
       out: (s) => out.push(s),
       err: (s) => err.push(s),
-      writeFile: (p, d) => {
+      writeFile: (p, d, exclusive) => {
+        // Model the real "wx" semantics: an exclusive write fails with EEXIST if
+        // the path already holds bytes, so tests can exercise --force.
+        if (exclusive && files[p] !== undefined) {
+          const e: NodeJS.ErrnoException = new Error(`EEXIST: file already exists, open '${p}'`);
+          e.code = "EEXIST";
+          throw e;
+        }
         files[p] = d;
       },
     },
@@ -111,6 +118,25 @@ test("--output writes to a file and keeps stdout clean", async () => {
   assert.equal(cli.out.length, 0);
   assert.ok(cli.files["/tmp/br_out.json"]);
   assert.match(cli.err.join("\n"), /Wrote \d+ bytes/);
+});
+
+test("--output refuses to overwrite an existing file (exit 1), unless --force", async () => {
+  const cli = makeCli();
+  // First write creates the file.
+  assert.equal(await run(["--output", "/tmp/br_dup.json", "parties"], cli.deps), 0);
+  const original = cli.files["/tmp/br_dup.json"];
+  assert.ok(original);
+
+  // A second write to the same path is refused with a clear message, exit 1, and
+  // the existing bytes are left untouched.
+  const code = await run(["--output", "/tmp/br_dup.json", "wahlkreise"], cli.deps);
+  assert.equal(code, 1);
+  assert.match(cli.err.join("\n"), /Refusing to overwrite/);
+  assert.equal(cli.files["/tmp/br_dup.json"], original);
+
+  // With --force the overwrite goes through.
+  assert.equal(await run(["--output", "/tmp/br_dup.json", "--force", "wahlkreise"], cli.deps), 0);
+  assert.notEqual(cli.files["/tmp/br_dup.json"], original);
 });
 
 test("a --output write failure reports a clean error (exit 1)", async () => {
