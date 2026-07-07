@@ -102,10 +102,20 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
   return { header, rows };
 }
 
-/** Map data rows to objects keyed by the header column names. */
+/**
+ * Map data rows to objects keyed by the header column names.
+ *
+ * The keys are attacker-controllable (they come from the CSV header row of a
+ * possibly-hostile or MITM'd response). Building on a `null` prototype
+ * (`Object.create(null)`) so a `__proto__`/`constructor`/`prototype` header
+ * cannot reach an inherited accessor or shadow an inherited method: it becomes
+ * an ordinary own data property. This closes the prototype-pollution class as
+ * defence-in-depth. Consumers only read fixed string keys and `JSON.stringify`
+ * the result, both of which work identically on a null-prototype object.
+ */
 export function rowsToObjects(parsed: ParsedCsv): Record<string, string>[] {
   return parsed.rows.map((row) => {
-    const obj: Record<string, string> = {};
+    const obj = Object.create(null) as Record<string, string>;
     for (let i = 0; i < parsed.header.length; i++) obj[parsed.header[i]!] = row[i] ?? "";
     return obj;
   });

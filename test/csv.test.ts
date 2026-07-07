@@ -47,6 +47,30 @@ test("rowsToObjects keys cells by the header names", () => {
   assert.equal(objs[1]!["Gruppenname"], "Sozialdemokratische Partei Deutschlands");
 });
 
+test("rowsToObjects does not pollute Object.prototype via a __proto__/constructor header", () => {
+  // A hostile CSV whose header names are dangerous keys. If rowsToObjects built
+  // rows on a normal prototype, these could reach inherited accessors; on a null
+  // prototype they are ordinary own data properties and nothing leaks.
+  const objs = rowsToObjects(parseCsv("__proto__;constructor;prototype;safe\np;c;q;ok\n"));
+
+  // Object.prototype is untouched: no global pollution.
+  assert.equal(({} as Record<string, unknown>)["polluted"], undefined);
+  assert.equal(Object.prototype.hasOwnProperty.call(Object.prototype, "safe"), false);
+
+  // The dangerous columns are captured as plain own properties on this row.
+  const row = objs[0]!;
+  assert.equal(Object.getPrototypeOf(row), null);
+  assert.equal(row["__proto__"], "p");
+  assert.equal(row["constructor"], "c");
+  assert.equal(row["prototype"], "q");
+  assert.equal(row["safe"], "ok");
+
+  // JSON serialisation of a null-prototype row still works and includes them.
+  const json = JSON.parse(JSON.stringify(row)) as Record<string, string>;
+  assert.equal(json["__proto__"], "p");
+  assert.equal(json["safe"], "ok");
+});
+
 test("parseGermanNumber handles decimals, thousands and placeholders", () => {
   assert.equal(parseGermanNumber("15,924417"), 15.924417);
   assert.equal(parseGermanNumber("60510631"), 60510631);
