@@ -4,6 +4,8 @@
 [![Release](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/actions/workflows/release.yml/badge.svg)](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/actions/workflows/release.yml)
 [![npm](https://img.shields.io/npm/v/@maschinenlesbar.org/bundeswahlleiterin-cli)](https://www.npmjs.com/package/@maschinenlesbar.org/bundeswahlleiterin-cli)
 
+**Website:** [English](https://maschinenlesbar-org.github.io/bundeswahlleiterin-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/bundeswahlleiterin-cli/de/) — command reference, guides and API docs
+
 Query the **official German federal election results** from your terminal.
 `bundeswahl` is a command-line tool over the
 [Bundeswahlleiterin](https://www.bundeswahlleiterin.de) open data for the
