@@ -48,7 +48,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .version(VERSION)
     .option("--base-url <url>", "data host base URL", parseBaseUrl, DEFAULT_BASE_URL)
-    .option("--timeout <ms>", "per-request timeout in milliseconds", parseIntArg)
+    .option("--timeout <ms>", "time limit per request in ms, whole response included (0 = no timeout)", parseIntArg)
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option("--max-retries <n>", "retries for transient 429/503 responses (0..10)", parseBoundedInt(0, 10))
     .option(

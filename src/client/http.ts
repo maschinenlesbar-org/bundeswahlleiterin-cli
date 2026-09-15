@@ -17,7 +17,7 @@ export interface HttpRequest {
   headers?: Record<string, string>;
   /** Optional request body (already serialised). */
   body?: string | Buffer;
-  /** Per-request timeout in milliseconds. */
+  /** Timeout for the whole request, response body included, in milliseconds. */
   timeoutMs?: number;
   /** Hard cap on the response body size in bytes; the request aborts if exceeded. */
   maxResponseBytes?: number;
@@ -57,6 +57,17 @@ export const nodeHttpTransport: Transport = (request) =>
     const driver = isHttps ? https : http;
     const maxBytes = request.maxResponseBytes;
 
+    // The timeout covers the whole exchange — connecting, waiting and reading the body.
+    // A socket idle timeout alone would let a server that trickles a byte now and then
+    // hold the request open indefinitely.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = <T>(fn: (value: T) => void) => (value: T) => {
+      clearTimeout(timer);
+      fn(value);
+    };
+    const done = settle(resolve);
+    const fail = settle(reject);
+
     const req = driver.request(
       url,
       { method: request.method, headers: request.headers },
@@ -71,14 +82,14 @@ export const nodeHttpTransport: Transport = (request) =>
           if (maxBytes !== undefined && received > maxBytes) {
             aborted = true;
             res.destroy();
-            reject(new BundeswahlNetworkError(`Response exceeded maxResponseBytes (${maxBytes})`));
+            fail(new BundeswahlNetworkError(`Response exceeded maxResponseBytes (${maxBytes})`));
             return;
           }
           chunks.push(chunk);
         });
         res.on("end", () => {
           if (aborted) return;
-          resolve({
+          done({
             status: res.statusCode ?? 0,
             headers: res.headers,
             body: Buffer.concat(chunks),
@@ -86,19 +97,22 @@ export const nodeHttpTransport: Transport = (request) =>
         });
         res.on("error", (err) => {
           if (aborted) return;
-          reject(new BundeswahlNetworkError(`Response stream error: ${err.message}`, { cause: err }));
+          fail(new BundeswahlNetworkError(`Response stream error: ${err.message}`, { cause: err }));
         });
       },
     );
 
     if (request.timeoutMs && request.timeoutMs > 0) {
-      req.setTimeout(request.timeoutMs, () => {
-        req.destroy(new BundeswahlNetworkError(`Request timed out after ${request.timeoutMs}ms`));
-      });
+      const timeoutMs = request.timeoutMs;
+      timer = setTimeout(() => {
+        const err = new BundeswahlNetworkError(`Request timed out after ${timeoutMs}ms`);
+        fail(err);
+        req.destroy(err);
+      }, timeoutMs);
     }
 
     req.on("error", (err) => {
-      reject(err instanceof BundeswahlNetworkError ? err : new BundeswahlNetworkError(err.message, { cause: err }));
+      fail(err instanceof BundeswahlNetworkError ? err : new BundeswahlNetworkError(err.message, { cause: err }));
     });
 
     if (request.body !== undefined) req.write(request.body);

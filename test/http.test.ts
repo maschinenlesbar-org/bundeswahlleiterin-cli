@@ -41,6 +41,30 @@ test("rejects an unsupported protocol with BundeswahlNetworkError", async () => 
   );
 });
 
+test("timeoutMs bounds the whole response, not just idle gaps", async () => {
+  // A server that trickles a byte every 50 ms for 2 s never goes idle for the timeout.
+  await withServer(
+    (_req, res) => {
+      res.writeHead(200, { "content-type": "text/csv" });
+      res.write("a;b");
+      const drip = setInterval(() => res.write(" "), 50);
+      const finish = setTimeout(() => res.end("\n"), 2000);
+      res.on("close", () => {
+        clearInterval(drip);
+        clearTimeout(finish);
+      });
+    },
+    async (baseUrl) => {
+      const started = Date.now();
+      await assert.rejects(
+        () => nodeHttpTransport({ method: "GET", url: baseUrl, timeoutMs: 300 }),
+        (err) => err instanceof BundeswahlNetworkError && /timed out after 300ms/.test(err.message),
+      );
+      assert.ok(Date.now() - started < 1500, `took ${Date.now() - started} ms`);
+    },
+  );
+});
+
 test("enforces maxResponseBytes", async () => {
   await withServer(
     (_req, res) => res.end("x".repeat(1000)),
