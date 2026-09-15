@@ -36,9 +36,10 @@ bundeswahl structure [--wahlkreis <nr|name>]   # structural data per Wahlkreis
 - **wahlkreise** — each has `nr`, `name`, and the Land (`landNr`, `landName`,
   `landAbk`). `--land` matches a Land by name substring, abbreviation (`BY`) or
   number (`09`).
-- **structure** — each row is a **column→value map** of ~50 German-named columns
-  (`Wahlkreis-Nr.`, `Wahlkreis-Name`, area, population, age structure, …). `--wahlkreis`
-  matches by number (leading zeros ignored) or name substring.
+- **structure** — each row is a **column→value map**: `Land`, `Wahlkreis-Nr.`,
+  `Wahlkreis-Name`, 48 numbered indicator columns (area, population, age structure, …)
+  and `Fußnoten`. **Every value is a string** in German number format (`"128,0"`,
+  `"20545"`). `--wahlkreis` matches by number (leading zeros ignored) or name substring.
 
 ## Recipes
 
@@ -46,14 +47,19 @@ bundeswahl structure [--wahlkreis <nr|name>]   # structural data per Wahlkreis
 # Real parties (drop the totals) with their full names
 bundeswahl parties | jq -r '.[] | select(.gruppenartCsv=="Partei") | "\(.kurz)\t\(.name)"'
 
-# Constituencies in one Land
+# Constituencies in one Land (use the abbreviation or number when the name is ambiguous)
 bundeswahl wahlkreise --land Bayern | jq -r '.[] | "\(.nr)\t\(.name)"'
+bundeswahl wahlkreise --land SN | jq -r '.[] | "\(.nr)\t\(.name)"'
 
 # How many Wahlkreise per Land?
 bundeswahl wahlkreise | jq -r 'group_by(.landName)[] | "\(.[0].landName): \(length)"'
 
-# Inspect the structural columns available, then read one
-bundeswahl structure --wahlkreis 1 | jq 'keys'
+# Inspect the structural columns available (in file order), then read one
+bundeswahl structure --wahlkreis 1 | jq '.[0] | keys_unsorted'
+
+# One indicator as a number, with the footnote that qualifies it
+bundeswahl structure --wahlkreis 152 \
+  | jq -r '.[0] | "\(.["Wahlkreis-Name"])\t\(.["Arbeitslosenquote November 2024 - insgesamt"] | sub(",";".") | tonumber)\t\(.["Fußnoten"])"'
 ```
 
 ## Traps
@@ -63,7 +69,20 @@ bundeswahl structure --wahlkreis 1 | jq 'keys'
 - **Wahlkreis numbers differ across files:** `wahlkreise`/results use `001`-style
   (leading zeros); Strukturdaten uses `1`. The CLI's `--wahlkreis` ignores leading
   zeros, so pass either.
+- **`--land` is a name substring:** `--land Sachsen` returns 54 Wahlkreise from
+  Niedersachsen, Sachsen and Sachsen-Anhalt. Use the abbreviation (`SN`) or number
+  (`14`), or check `landName` in the output.
 - **Strukturdaten column names are long, German, and dated** (e.g. "Bevölkerung am
-  31.12.2023 …") — read `keys` first rather than guessing a field name.
+  31.12.2023 …") — read `keys_unsorted` first rather than guessing a field name.
+- **Strukturdaten values are strings with a decimal comma** — convert with
+  `sub(",";".") | tonumber` before comparing or sorting (a plain string sort puts
+  `"9,5"` above `"10,1"`).
+- **Read `Fußnoten` before comparing Wahlkreise.** Where a city forms several
+  Wahlkreise (Berlin, Hamburg, München, Köln, Leipzig, …), most columns hold the value
+  for the *whole city* (e.g. Leipzig II: "In den Spalten 1 und 7 bis 48 sind die Werte
+  für Leipzig insgesamt ausgewiesen"), so its Wahlkreise show identical figures. Some
+  Kreise are split the same way (e.g. Wahlkreise 103/104, Kreis Mettmann). "Spalte n"
+  is the n-th column after `Wahlkreis-Name`. Say so rather than ranking such
+  Wahlkreise against each other.
 - Actual vote counts/percentages → the **bundeswahl-results** skill.
 - **Cite the source** — "Quelle: Die Bundeswahlleiterin, Wiesbaden 2025".
