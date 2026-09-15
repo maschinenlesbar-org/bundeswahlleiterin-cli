@@ -35,14 +35,16 @@ member directly (Erststimme). `wahlkreise` lists them with their Land.
 ## Votes
 
 **Erststimme (Stimme 1).** The **first vote** — for a *candidate* in your Wahlkreis;
-the candidate with the most first votes wins the constituency's **direct mandate**.
+the candidate with the most first votes wins the constituency's **direct mandate**, if
+the party's Zweitstimmen cover the seat (see **Gewählt**).
 
 **Zweitstimme (Stimme 2).** The **second vote** — for a party *list*; this vote
 decides each party's overall share of seats. Usually the number people mean by "the
 result".
 
-In the data, `stimme` is `1` or `2`; **System-Gruppe** rows (turnout totals) have no
-ballot (`null`).
+In the data, `stimme` is `1` or `2`. Of the **System-Gruppe** rows, `Wahlberechtigte`
+and `Wählende` have no ballot (`null`); `Gültige`, `Ungültige` and `Übrige` come once
+per ballot.
 
 ## Groups & results
 
@@ -50,7 +52,8 @@ ballot (`null`).
 - **Partei** — a political party (SPD, CDU, GRÜNE, …).
 - **Einzelbewerber/Wählergruppe** — an independent candidate or voter group.
 - **System-Gruppe** — a **total**, not a contestant: `Wahlberechtigte` (eligible
-  voters), `Wählende` (turnout), `Ungültige`/`Gültige Stimmen` (invalid/valid votes).
+  voters), `Wählende` (turnout), `Ungültige`/`Gültige` (invalid/valid votes) and
+  `Übrige` (a remainder group that carries only previous-election values).
 
 **kerg2.** The Bundeswahlleiterin's **normalized results file** ("Ergebnisse nach
 Wahlkreisen"), the source for `results`. It is *long/tidy*: **one row per area ×
@@ -59,13 +62,16 @@ row carries the count (`anzahl`), share (`prozent`), and the comparison to the
 previous election (`vorpAnzahl`, `diffProzentPkt`, …). (The `kerg.csv` file holds
 the same data in a hard-to-parse wide layout; this CLI uses `kerg2`.)
 
-**Gewählt.** The name of the party that **won the constituency's direct mandate**
-(Erststimme). It repeats on every row of a Wahlkreis (e.g. `"GRÜNE"`), and is empty
-for Bund/Land rows.
+**Gewählt.** The name of the party whose Wahlkreis candidate was **elected** (the
+direct mandate). It repeats on every row of a Wahlkreis (e.g. `"GRÜNE"`), and is empty
+for Bund/Land rows. It is `–` where the Erststimme winner got no seat because the
+party's Zweitstimmen didn't cover it (23 Wahlkreise in 2025), so it is not always the
+party with the most first votes. Candidate names are not in the data.
 
 **Strukturdaten.** **Structural data** per Wahlkreis — ~50 demographic and economic
 indicators (area, population, age structure, employment, …), published so results
-can be read in context. `structure` returns each Wahlkreis as a column→value map.
+can be read in context. `structure` returns each Wahlkreis as a column→value map; its
+`Fußnoten` column notes where a column holds a city- or Kreis-wide value.
 
 ## Data & format
 
@@ -77,7 +83,8 @@ attribution** ("Quelle: Die Bundeswahlleiterin, Wiesbaden 2025"). See
 **CSV quirks.** The files are **semicolon-delimited**, **UTF-8 with a BOM**, use
 **German decimals** (comma, e.g. `82,5122`), and start with a multi-line
 human-readable **preamble** before the header row. `bundeswahl` handles all of this;
-counts/percentages reach you as JSON numbers, `null` for empty/`–` cells.
+in `results`, counts/percentages reach you as JSON numbers, `null` for empty/`–` cells.
+`structure` passes its values through as strings in German format (`"128,0"`).
 
 ## CLI / technical
 

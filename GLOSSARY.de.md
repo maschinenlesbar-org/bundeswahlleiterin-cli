@@ -36,14 +36,15 @@ direkt gewählt wird (Erststimme). `wahlkreise` listet sie mit ihrem Land auf.
 
 **Erststimme (Stimme 1).** Die Stimme für eine *Kandidatin oder einen Kandidaten* in Ihrem
 Wahlkreis; wer die meisten Erststimmen erhält, gewinnt das **Direktmandat** des
-Wahlkreises.
+Wahlkreises, sofern die Zweitstimmen der Partei den Sitz decken (siehe **Gewählt**).
 
 **Zweitstimme (Stimme 2).** Die Stimme für die *Liste* einer Partei; sie entscheidet über
 den Gesamtanteil der Sitze jeder Partei. Meist ist sie gemeint, wenn von „dem Ergebnis“
 die Rede ist.
 
-In den Daten ist `stimme` `1` oder `2`; Zeilen der **System-Gruppe** (Summen zur
-Wahlbeteiligung) haben keine Stimme (`null`).
+In den Daten ist `stimme` `1` oder `2`. Von den Zeilen der **System-Gruppe** haben
+`Wahlberechtigte` und `Wählende` keine Stimme (`null`); `Gültige`, `Ungültige` und
+`Übrige` gibt es je Stimme einmal.
 
 ## Gruppen & Ergebnisse
 
@@ -51,7 +52,8 @@ Wahlbeteiligung) haben keine Stimme (`null`).
 - **Partei** – eine politische Partei (SPD, CDU, GRÜNE, …).
 - **Einzelbewerber/Wählergruppe** – ein parteiloser Einzelbewerber oder eine Wählergruppe.
 - **System-Gruppe** – eine **Summe**, kein Wahlbewerber: `Wahlberechtigte`, `Wählende`,
-  `Ungültige`/`Gültige Stimmen`.
+  `Ungültige`/`Gültige` und `Übrige` (eine Restgruppe, die nur Werte der vorigen Wahl
+  enthält).
 
 **kerg2.** Die **normalisierte Ergebnisdatei** der Bundeswahlleiterin („Ergebnisse nach
 Wahlkreisen“), die Quelle für `results`. Sie liegt im *Long-/Tidy-Format* vor: **eine Zeile
@@ -61,14 +63,18 @@ Vergleich zur vorigen Wahl (`vorpAnzahl`, `diffProzentPkt`, …). (Die Datei `ke
 enthält dieselben Daten in einem schwer zu parsenden Breitformat; diese CLI verwendet
 `kerg2`.)
 
-**Gewählt.** Der Name der Partei, die das **Direktmandat des Wahlkreises gewonnen** hat
-(Erststimme). Er wiederholt sich in jeder Zeile eines Wahlkreises (z. B. `"GRÜNE"`) und
-ist bei Zeilen für Bund und Land leer.
+**Gewählt.** Der Name der Partei, deren Wahlkreisbewerber **gewählt** wurde (das
+Direktmandat). Er wiederholt sich in jeder Zeile eines Wahlkreises (z. B. `"GRÜNE"`) und
+ist bei Zeilen für Bund und Land leer. Er ist `–`, wo der Erststimmensieger keinen Sitz
+erhielt, weil die Zweitstimmen seiner Partei ihn nicht deckten (2025 in 23 Wahlkreisen);
+er nennt also nicht immer die Partei mit den meisten Erststimmen. Namen von Bewerbern
+enthalten die Daten nicht.
 
 **Strukturdaten.** Kennzahlen **je Wahlkreis** – rund 50 demografische und
 wirtschaftliche Indikatoren (Fläche, Bevölkerung, Altersstruktur, Beschäftigung, …),
 veröffentlicht, damit sich die Ergebnisse im Zusammenhang lesen lassen. `structure`
-liefert jeden Wahlkreis als Zuordnung Spalte→Wert.
+liefert jeden Wahlkreis als Zuordnung Spalte→Wert; die Spalte `Fußnoten` vermerkt, wo
+eine Spalte einen Wert für die ganze Stadt oder den ganzen Kreis enthält.
 
 ## Daten & Format
 
@@ -80,8 +86,9 @@ der Daten: Sie dürfen sie frei kopieren, bearbeiten und weiterverwenden, auch k
 **CSV-Eigenheiten.** Die Dateien sind **durch Semikolons getrennt**, in **UTF-8 mit BOM**
 kodiert, verwenden **deutsche Dezimalzahlen** (Komma, z. B. `82,5122`) und beginnen vor
 der Kopfzeile mit einer mehrzeiligen, für Menschen gedachten **Präambel**. `bundeswahl`
-erledigt all das; Anzahlen und Prozentwerte erhalten Sie als JSON-Zahlen, `null` bei
-leeren oder `–`-Zellen.
+erledigt all das; bei `results` erhalten Sie Anzahlen und Prozentwerte als JSON-Zahlen,
+`null` bei leeren oder `–`-Zellen. `structure` gibt seine Werte unverändert als Strings
+im deutschen Format aus (`"128,0"`).
 
 ## CLI / Technik
 
