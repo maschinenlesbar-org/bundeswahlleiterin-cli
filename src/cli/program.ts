@@ -9,6 +9,7 @@ import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { BundeswahlClient } from "../client/client.js";
 import { DEFAULT_BASE_URL } from "../client/engine.js";
+import { MAX_TIMEOUT_MS } from "../client/http.js";
 import { parseBaseUrl, parseBoundedInt, parseHeaderValue, parseIntArg } from "./shared.js";
 import { registerCommands } from "./commands/datasets.js";
 
@@ -48,7 +49,11 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .version(VERSION)
     .option("--base-url <url>", "data host base URL", parseBaseUrl, DEFAULT_BASE_URL)
-    .option("--timeout <ms>", "time limit per request in ms, whole response included (0 = no timeout)", parseIntArg)
+    .option(
+      "--timeout <ms>",
+      "time limit per request in ms, whole response included (0 = no timeout)",
+      parseBoundedInt(0, MAX_TIMEOUT_MS),
+    )
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option("--max-retries <n>", "retries for transient 429/503 responses (0..10)", parseBoundedInt(0, 10))
     .option(
