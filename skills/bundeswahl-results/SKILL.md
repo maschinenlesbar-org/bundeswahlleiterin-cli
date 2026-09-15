@@ -3,8 +3,8 @@ name: bundeswahl-results
 description: >
   Look up official German federal election (Bundestagswahl 2025) results using the
   bundeswahlleiterin-cli. Trigger when the user asks "who won the Bundestagswahl
-  2025?", "what was the SPD/CDU/GRÜNE second-vote share?", "who won the direct
-  mandate in a constituency?", "election result for Bavaria / a Wahlkreis", "how
+  2025?", "what was the SPD/CDU/GRÜNE second-vote share?", "which party won the
+  direct mandate in a constituency?", "election result for Bavaria / a Wahlkreis", "how
   high was turnout?", or wants first- or second-vote counts and percentages by
   Bund, Land or Wahlkreis, optionally filtered by party.
 version: 1.0.0
@@ -32,13 +32,18 @@ bundeswahl results [--area-type Bund|Land|Wahlkreis] [--area <nr-or-name>] \
 
 Each row is one **area × group × ballot** with `anzahl` (count, an integer),
 `prozent` (share, a number), the previous-election comparison, and `gewaehlt` (the
-constituency's direct-mandate winner). `stimme` is `1` (Erststimme) or `2`
-(Zweitstimme); `null` for System-Gruppe totals.
+party whose Wahlkreis candidate was elected, or `–`). `stimme` is `1` (Erststimme)
+or `2` (Zweitstimme); `null` only for the `Wahlberechtigte` and `Wählende` rows.
 
 ## Filters
 
 - `--area-type` — `Bund` (national), `Land` (a state), `Wahlkreis` (a constituency).
-- `--area` — an area by **exact number** (`005`, `09`) or **name substring** (`Kiel`).
+- `--area` — an area by **number** (leading zeros ignored) or **name substring**
+  (`Kiel`). **Always pair it with `--area-type`:** Land and Wahlkreis numbers overlap
+  (`--area 14` returns Land 14 Sachsen *and* Wahlkreis 014; `001` returns Land 01 and
+  Wahlkreis 001), and names match as substrings (`Sachsen` also matches Niedersachsen
+  and Sachsen-Anhalt; `Frankfurt am Main I` also matches `… II`). Check `gebietsname`
+  in the output, and prefer the number for a Wahlkreis.
 - `--party` — party/group **name substring**, case-insensitive (`SPD`, `grüne`).
 - `--vote` — `1`/`erst` = Erststimme (candidate), `2`/`zweit` = Zweitstimme (list).
 - `--group-type` — `Partei`, `System-Gruppe` (totals), `Einzelbewerber/Wählergruppe`.
@@ -54,9 +59,16 @@ bundeswahl results --area-type Bund --vote 2 --group-type Partei \
 bundeswahl results --area-type Land --vote 2 --party CDU \
   | jq -r '.[] | "\(.gebietsname)\t\(.prozent)%"'
 
-# Direct-mandate winner of a constituency
-bundeswahl results --area "Kiel" --vote 1 --group-type Partei \
-  | jq -r 'sort_by(-.anzahl)[0] | "\(.gebietsname): \(.gruppenname)"'
+# Erststimme winner of a constituency, and whether that seat was allocated
+bundeswahl results --area-type Wahlkreis --area 005 --vote 1 \
+  | jq -r 'map(select(.gruppenart != "System-Gruppe" and .anzahl != null)) | sort_by(-.anzahl)[0]
+      | "\(.gebietsname): \(.gruppenname) \(.prozent)% · gewaehlt: \(.gewaehlt)"'
+
+# Wahlkreise whose Erststimme winner got no seat (gewaehlt is "–")
+bundeswahl results --area-type Wahlkreis --vote 1 \
+  | jq -r 'group_by(.gebietsnummer)[] | select(.[0].gewaehlt == "–")
+      | (map(select(.gruppenart != "System-Gruppe" and .anzahl != null)) | sort_by(-.anzahl)[0])
+      | "\(.gebietsnummer) \(.gebietsname)\t\(.gruppenname)"'
 
 # Turnout (Wählende) nationally
 bundeswahl results --area-type Bund --group-type System-Gruppe \
@@ -68,11 +80,23 @@ bundeswahl results --area-type Bund --group-type System-Gruppe \
 - **Erststimme (1) vs Zweitstimme (2).** The "result" people usually mean is the
   **Zweitstimme** (party-list share). The Erststimme decides the direct mandate.
   Always set `--vote` (or expect both).
-- **System-Gruppe rows are totals, not parties** (`Wahlberechtigte`, `Wählende`,
-  `Gültige/Ungültige Stimmen`) and have `stimme: null` — exclude them with
-  `--group-type Partei` unless you want turnout numbers.
-- **`gewaehlt` is the Wahlkreis winner**, repeated on every row of that
-  constituency — not a per-row flag.
-- **`prozent` can be `null`** (empty/`–` cell) — guard in `jq` before arithmetic.
+- **System-Gruppe rows are totals, not parties**: `Wahlberechtigte` and `Wählende`
+  (`stimme: null`), and `Gültige`, `Ungültige` and `Übrige`, which come per ballot
+  (`stimme` 1 and 2; `Übrige` has only previous-election values). Exclude them with
+  `--group-type Partei` unless you want turnout numbers — a `--vote` filter alone
+  keeps `Gültige`/`Ungültige`/`Übrige`.
+- **`anzahl` and `prozent` can be `null`** — an area lists parties that had no
+  candidate (Erststimme) or no list (Zweitstimme) there, with `anzahl: null`; every
+  Wahlkreis has such rows. `sort_by(-.anzahl)` then fails (`null (null) cannot be
+  negated`): drop nulls first (`map(select(.anzahl != null))`) before sorting or
+  arithmetic.
+- **`gewaehlt` is not simply the Erststimme winner.** It names the *party* whose
+  Wahlkreis candidate was elected, repeated on every row of that constituency (empty
+  on Bund/Land rows). Under the 2025 electoral law a Wahlkreis winner only gets the
+  seat if the party's Zweitstimmen cover it; where they don't, `gewaehlt` is `–` and
+  no one was elected directly (23 Wahlkreise, e.g. 001 Flensburg – Schleswig). Report
+  the top Erststimme party *and* `gewaehlt`.
+- **No candidate names.** The data names parties only; say so if asked who the
+  person is.
 - Parties, constituencies and structural data → the **bundeswahl-reference** skill.
 - **Cite the source** — "Quelle: Die Bundeswahlleiterin, Wiesbaden 2025".
