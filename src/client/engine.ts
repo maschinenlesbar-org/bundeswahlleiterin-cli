@@ -49,8 +49,9 @@ const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
  * ends up in a `BundeswahlApiError.message` that run.ts prints raw to stderr.
  * Without this, a hostile or MITM'd endpoint could return a 4xx/5xx body carrying
  * ANSI/OSC escape sequences (retitle the window, clear the screen, spoof output)
- * that reach the user's terminal. The stdout data path is already safe because
- * JSON.stringify escapes control characters.
+ * that reach the user's terminal. The CLI's JSON output is escaped separately
+ * (escapeControlChars in cli/shared.ts): JSON.stringify alone leaves DEL and the
+ * C1 range raw.
  *
  * Removes all C0 controls except tab (0x09) and newline (0x0a), the C1 range, and
  * DEL (0x7f). Written with codePointAt rather than a control-char regex literal so

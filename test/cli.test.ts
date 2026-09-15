@@ -112,6 +112,23 @@ test("--compact prints single-line JSON", async () => {
   assert.equal(cli.out.length, 1);
 });
 
+test("DEL and C1 control characters in server data are escaped in the JSON output", async () => {
+  const controls = String.fromCharCode(0x7f, 0x85, 0x9b) + "2J";
+  const esc = String.fromCharCode(0x1b) + "[31m";
+  const csv = `Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n4;PARTEI;Partei;Rat${controls};${esc}\n`;
+  for (const format of [[], ["--compact"]]) {
+    const cli = makeCli(() => csvResponse(csv));
+    assert.equal(await run([...format, "parties"], cli.deps), 0);
+    const text = cli.out.join("\n");
+    const raw = [...text].filter((c) => c.charCodeAt(0) < 0x20 ? c !== "\n" : c.charCodeAt(0) >= 0x7f && c.charCodeAt(0) <= 0x9f);
+    assert.deepEqual(raw, [], format.join(" "));
+    assert.match(text, /Rat\\u007f\\u0085\\u009b2J/);
+    assert.deepEqual(JSON.parse(text), [
+      { gruppenschluessel: "4", gruppenartXml: "PARTEI", gruppenartCsv: "Partei", kurz: `Rat${controls}`, name: esc },
+    ]);
+  }
+});
+
 test("--output writes to a file and keeps stdout clean", async () => {
   const cli = makeCli();
   await run(["--output", "/tmp/br_out.json", "parties"], cli.deps);
