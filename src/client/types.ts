@@ -6,14 +6,14 @@
 /** The kind of electoral area a result row is for. */
 export type AreaType = "Bund" | "Land" | "Wahlkreis";
 
-/** Which ballot a count refers to: 1 = Erststimme, 2 = Zweitstimme (null = system group). */
+/** Which ballot a count refers to: 1 = Erststimme, 2 = Zweitstimme (null on the Wahlberechtigte/Wählende rows). */
 export type Vote = 1 | 2;
 
 /**
  * One row of the "Ergebnisse nach Wahlkreisen" results (kerg2). The table is long/
  * tidy: one row per (area × group × ballot), so each party has separate first- and
  * second-vote rows, and "System-Gruppe" rows carry turnout totals (Wahlberechtigte,
- * Wählende, Gültige Stimmen, …).
+ * Wählende, Gültige, …).
  */
 export interface ResultRow {
   /** Election type, e.g. "BT" (Bundestag). */
@@ -32,9 +32,9 @@ export interface ResultRow {
   /** Party / group name, e.g. "SPD", "CDU", "Wahlberechtigte". */
   gruppenname: string;
   gruppenreihenfolge: string;
-  /** 1 = Erststimme, 2 = Zweitstimme; null for system-group totals. */
+  /** 1 = Erststimme, 2 = Zweitstimme; null for the Wahlberechtigte and Wählende totals. */
   stimme: Vote | null;
-  /** Count for this row. */
+  /** Count for this row; null when the group had no candidate/list in this area. */
   anzahl: number | null;
   /** Share in percent. */
   prozent: number | null;
@@ -45,9 +45,10 @@ export interface ResultRow {
   diffProzentPkt: number | null;
   bemerkung: string;
   /**
-   * Name of the group that won the constituency's direct mandate (Erststimme) —
-   * the same value repeats on every row of a Wahlkreis (e.g. "GRÜNE"). Empty or
-   * "–" for Bund/Land rows and where not applicable.
+   * Name of the group whose Wahlkreis candidate was elected — the same value
+   * repeats on every row of a Wahlkreis (e.g. "GRÜNE"). "–" where the Erststimme
+   * winner's seat was not covered by the party's Zweitstimmen (no one elected
+   * directly); empty for Bund/Land rows.
    */
   gewaehlt: string;
 }
@@ -74,6 +75,8 @@ export interface Wahlkreis {
  * A structural-data row (Strukturdaten) for one Wahlkreis. The file has ~50
  * demographic/economic columns whose names vary, so it is exposed as an open
  * key→value map (column name → cell), preserving whatever the file provides.
+ * Values stay strings in German number format (e.g. "128,0"); the `Fußnoten`
+ * column notes where a column holds a city- or Kreis-wide value.
  */
 export type StructureRow = Record<string, string>;
 
@@ -81,7 +84,10 @@ export type StructureRow = Record<string, string>;
 export interface ResultsQuery {
   /** Restrict to one area level. */
   areaType?: AreaType;
-  /** Match an area by exact number or case-insensitive name substring. */
+  /**
+   * Match an area by number (leading zeros ignored) or case-insensitive name
+   * substring. Land and Wahlkreis numbers overlap, so combine with `areaType`.
+   */
   area?: string;
   /** Match a group/party by case-insensitive name substring. */
   party?: string;

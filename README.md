@@ -46,8 +46,8 @@ bundeswahl results --area-type Bund --vote 2 --group-type Partei | jq '.[] | {pa
 bundeswahl results --area-type Bund --vote 2 --party SPD
 
 # Who won the direct mandate (Erststimme) in Kiel, and by how much?
-bundeswahl results --area Kiel --vote 1 --group-type Partei \
-  | jq -r 'sort_by(-.anzahl)[] | "\(.gruppenname)\t\(.anzahl)\t\(.prozent)%"'
+bundeswahl results --area-type Wahlkreis --area Kiel --vote 1 --group-type Partei \
+  | jq -r 'map(select(.anzahl != null)) | sort_by(-.anzahl)[] | "\(.gruppenname)\t\(.anzahl)\t\(.prozent)%"'
 
 # The 299 constituencies in Bavaria
 bundeswahl wahlkreise --land Bayern | jq -r '.[].name'
@@ -73,7 +73,7 @@ New to terms like *Wahlkreis*, *Erststimme/Zweitstimme*, *kerg2*, *Gebietsart* o
 | Option | Meaning |
 | --- | --- |
 | `--area-type <level>` | `Bund` \| `Land` \| `Wahlkreis` |
-| `--area <nr-or-name>` | an area by exact number (`005`, `09`) or name substring (`Kiel`) |
+| `--area <nr-or-name>` | an area by number, leading zeros ignored (`005`, `09`), or name substring (`Kiel`); Land and Wahlkreis numbers overlap, so pair it with `--area-type` |
 | `--party <name>` | a party/group by name substring (`SPD`, `GRÜNE`), case-insensitive |
 | `--vote <1\|2>` | `1`/`erst` = Erststimme, `2`/`zweit` = Zweitstimme |
 | `--group-type <type>` | a `Gruppenart` — `Partei`, `System-Gruppe`, `Einzelbewerber/Wählergruppe` |

@@ -49,18 +49,27 @@ bundeswahl results --area-type Bund --vote 2 --group-type Partei \
 bundeswahl results --area-type Land --vote 2 --party CDU \
   | jq -r '.[] | "\(.gebietsname)\t\(.prozent)%"'
 
-# Who won the direct mandate in a constituency?
-bundeswahl results --area "Flensburg" --vote 1 --group-type Partei \
-  | jq -r 'sort_by(-.anzahl)[0] | "\(.gebietsname): \(.gruppenname)"'
+# Who won the Erststimme in a constituency, and was the seat allocated?
+bundeswahl results --area-type Wahlkreis --area 001 --vote 1 \
+  | jq -r 'map(select(.gruppenart != "System-Gruppe" and .anzahl != null)) | sort_by(-.anzahl)[0]
+      | "\(.gebietsname): \(.gruppenname) \(.prozent)% · gewaehlt: \(.gewaehlt)"'
 
 # Turnout (Wählende) nationally
 bundeswahl results --area-type Bund --group-type System-Gruppe \
   | jq -r '.[] | select(.gruppenname=="Wählende") | "\(.prozent)%"'
 ```
 
-> `--area` matches an area by **exact number** (`005`, `09`) **or name substring**
-> (`Kiel`). `--party` / `--group-type` are case-insensitive substrings. `--vote`
-> accepts `1`/`erst` and `2`/`zweit`.
+> `--area` matches an area by **number** (leading zeros ignored) **or name substring**
+> (`Kiel`). Land and Wahlkreis numbers overlap (`--area 14` returns Land 14 Sachsen and
+> Wahlkreis 014), and names match as substrings (`Sachsen` also matches Niedersachsen
+> and Sachsen-Anhalt), so combine `--area` with `--area-type`. `--party` /
+> `--group-type` are case-insensitive substrings. `--vote` accepts `1`/`erst` and
+> `2`/`zweit`.
+>
+> `anzahl`/`prozent` are `null` for parties without a candidate or list in the area —
+> drop them before `sort_by(-.anzahl)`, which otherwise fails. `gewaehlt` names the party
+> whose Wahlkreis candidate was elected; it is `–` where the Erststimme winner's seat
+> was not covered by the party's Zweitstimmen (23 Wahlkreise, e.g. 001 above).
 
 ## `parties` — the parties / groups
 
@@ -85,7 +94,9 @@ bundeswahl wahlkreise --land BY       # …abbreviation…
 bundeswahl wahlkreise --land 09       # …or number
 ```
 
-Each carries `nr`, `name`, and the Land (`landNr`, `landName`, `landAbk`).
+Each carries `nr`, `name`, and the Land (`landNr`, `landName`, `landAbk`). A name is a
+substring match: `--land Sachsen` also returns Niedersachsen and Sachsen-Anhalt, so use
+`SN` or `14` there.
 
 ## `structure` — structural data per Wahlkreis
 
@@ -99,8 +110,13 @@ Each row is a **column→value map** of ~50 demographic/economic indicators (the
 Strukturdaten column names are long and German — inspect the keys):
 
 ```bash
-bundeswahl structure --wahlkreis 1 | jq 'keys'
+bundeswahl structure --wahlkreis 1 | jq '.[0] | keys_unsorted'
 ```
+
+Every value is a **string** in German number format (`"128,0"`) — convert with
+`sub(",";".") | tonumber` before comparing. Read the `Fußnoten` column: where a city
+forms several Wahlkreise (Berlin, Hamburg, München, Leipzig, …), most columns hold the
+city-wide value, so those Wahlkreise show identical figures.
 
 ## Scripting recipes
 
@@ -112,7 +128,7 @@ bundeswahl results --area-type Bund --vote 2 --group-type Partei \
 # Save the full result set to disk (stdout stays clean; a note goes to stderr)
 bundeswahl --output btw2025.json results
 
-# All direct-mandate winners, one per Wahlkreis
+# The party elected in each Wahlkreis ("–" = the Erststimme winner got no seat)
 bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
   | jq -r 'group_by(.gebietsnummer)[] | .[0] | "\(.gebietsname)\t\(.gewaehlt)"'
 ```
@@ -132,7 +148,9 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
 - **Cite the source.** The data is Datenlizenz Deutschland – Namensnennung 2.0:
   free to reuse (incl. commercially) **with attribution** — "Quelle: Die
   Bundeswahlleiterin, Wiesbaden 2025". See [DATA_LICENSE.md](DATA_LICENSE.md).
-- **`stimme` is `null` for System-Gruppe rows** (turnout totals) — they aren't a
-  ballot; guard for it when filtering by vote in `jq`.
-- **Numbers are numbers, gaps are `null`.** `anzahl`/`prozent` parse from the German
-  format; empty or `–` cells become `null`, distinct from `0`.
+- **`stimme` is `null` for the `Wahlberechtigte` and `Wählende` rows** — they aren't a
+  ballot; guard for it when filtering by vote in `jq`. The other System-Gruppe rows
+  (`Gültige`, `Ungültige`, `Übrige`) come per ballot.
+- **Numbers are numbers, gaps are `null`.** In `results`, `anzahl`/`prozent` parse from
+  the German format; empty or `–` cells become `null`, distinct from `0`. `structure`
+  values stay strings.

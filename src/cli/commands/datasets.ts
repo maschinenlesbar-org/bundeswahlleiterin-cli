@@ -30,7 +30,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .command("results")
     .description("Bundestagswahl 2025 results (by area, party and ballot)")
     .option("--area-type <level>", "restrict to Bund | Land | Wahlkreis", parseAreaType)
-    .option("--area <nr-or-name>", "an area by exact number or name substring, e.g. 001 or Kiel", parseNonEmpty)
+    .option("--area <nr-or-name>", "an area by number (leading zeros ignored) or name substring, e.g. 005 or Kiel; Land and Wahlkreis numbers overlap, so pair with --area-type", parseNonEmpty)
     .option("--party <name>", "a party/group by name substring, e.g. SPD, GRÜNE", parseNonEmpty)
     .option("--vote <1|2>", "restrict to 1 (Erststimme) or 2 (Zweitstimme)", parseVote)
     .option("--group-type <type>", "restrict to a Gruppenart, e.g. Partei, System-Gruppe", parseNonEmpty)

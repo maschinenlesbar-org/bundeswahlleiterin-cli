@@ -15,7 +15,7 @@ requirement) so Claude doesn't rediscover them each time.
 
 | Skill | What it does | Ask it… |
 |---|---|---|
-| **bundeswahl-results** | The official result — first/second votes by Bund, Land or Wahlkreis, filtered by party. | "who won the 2025 Bundestagswahl?", "SPD second-vote share", "who won the direct mandate in Kiel?", "how high was turnout?" |
+| **bundeswahl-results** | The official result — first/second votes by Bund, Land or Wahlkreis, filtered by party. | "who won the 2025 Bundestagswahl?", "SPD second-vote share", "which party won the direct mandate in Kiel?", "how high was turnout?" |
 | **bundeswahl-reference** | The reference data — parties, the 299 constituencies (by Land), and structural data per Wahlkreis. | "which parties stood?", "list the Wahlkreise in Bavaria", "structural data for a constituency" |
 
 ## Requirements
@@ -84,11 +84,18 @@ non-obvious parts of this data, for example:
 
 - **Erststimme vs Zweitstimme** — the headline "result" is the second vote (`--vote 2`,
   party list); the first vote decides the direct mandate;
-- **System-Gruppe rows are totals**, not parties (Wahlberechtigte, Wählende, …) and
-  have `stimme: null` — filter with `--group-type Partei` unless you want turnout;
+- **System-Gruppe rows are totals**, not parties (Wahlberechtigte, Wählende, Gültige,
+  …) — filter with `--group-type Partei` unless you want turnout;
 - **the result is long/tidy** — one row per area × group × ballot, with `anzahl` (int)
-  and `prozent` (number), and `null` for empty cells;
+  and `prozent` (number), and `null` for empty cells (parties without a candidate or
+  list in that area), which a `jq` sort must drop first;
+- **`gewaehlt` is not the Erststimme winner** — in 23 Wahlkreise the winner's seat was
+  not covered by the party's Zweitstimmen and `gewaehlt` is `–`;
+- **`--area` numbers and names are ambiguous** — Land 14 and Wahlkreis 014 both match
+  `14`, and `Sachsen` also matches Niedersachsen — so pair it with `--area-type`;
 - **Wahlkreis numbers differ across files** (`005` vs `5`) — the CLI normalises them;
+- **Strukturdaten values are German-format strings**, and for cities split into several
+  Wahlkreise most columns hold the city-wide value (see `Fußnoten`);
 - **attribution is required** — the data is Datenlizenz Deutschland – Namensnennung 2.0,
   so cite "Quelle: Die Bundeswahlleiterin, Wiesbaden 2025".
 
