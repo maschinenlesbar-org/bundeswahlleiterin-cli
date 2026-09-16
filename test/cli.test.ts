@@ -211,3 +211,67 @@ test("an unknown command exits 2", async () => {
   const cli = makeCli();
   assert.equal(await run(["boguscmd"], cli.deps), 2);
 });
+
+// --- A starved filter option must not look like "nothing matched" -------------
+// `--party --group-type` makes commander hand "--group-type" to --party as its
+// value; the starved option is never applied. Before this was caught, the run
+// printed `[]` and exited 0 — indistinguishable from a real empty result.
+
+for (const [name, argv] of [
+  ["results --party", ["results", "--area-type", "Bund", "--vote", "2", "--party", "--group-type"]],
+  ["results --area", ["results", "--area", "--vote", "2"]],
+  ["results --group-type", ["results", "--group-type", "--vote", "2"]],
+  ["wahlkreise --land", ["wahlkreise", "--land", "--wahlkreis"]],
+  ["structure --wahlkreis", ["structure", "--wahlkreis", "--land"]],
+] as const) {
+  test(`a starved ${name} is a usage error, not an empty result`, async () => {
+    const cli = makeCli();
+    const code = await run(["--compact", ...argv], cli.deps);
+    assert.equal(code, 2);
+    assert.deepEqual(cli.out, []);
+    // Either diagnostic is fine — commander reports "argument missing" when the
+    // swallowed token is a known option of that command, and hands it to the
+    // parser (which rejects it) when it is not. Both are loud; neither is `[]`.
+    assert.match(cli.err.join("\n"), /looks like a missing value|argument missing/);
+  });
+}
+
+test("an empty filter value is a usage error", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "results", "--party", ""], cli.deps), 2);
+  assert.deepEqual(cli.out, []);
+});
+
+test("ordinary filter values still work", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "results", "--party", "SPD"], cli.deps), 0);
+  assert.ok(cli.out.join("").includes("SPD"));
+});
+
+// --- The official Land/Bund summary rows ------------------------------------
+
+test("structure excludes the aggregate rows by default", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  assert.ok(rows.every((r) => Number(r["Wahlkreis-Nr."]) <= 299));
+  assert.ok(!rows.some((r) => r["Wahlkreis-Name"] === "Land insgesamt"));
+});
+
+test("structure --include-aggregates returns the official summary rows", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure", "--include-aggregates"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  const agg = rows.filter((r) => Number(r["Wahlkreis-Nr."]) > 299);
+  assert.equal(agg.length, 1);
+  assert.equal(agg[0]!["Wahlkreis-Name"], "Land insgesamt");
+  assert.equal(agg[0]!["Wahlkreis-Nr."], "901");
+});
+
+test("--include-aggregates makes an aggregate reachable by its number", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure", "--include-aggregates", "--wahlkreis", "901"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!["Land"], "Schleswig-Holstein");
+});

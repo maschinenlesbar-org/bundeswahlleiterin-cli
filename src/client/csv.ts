@@ -127,6 +127,20 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
  * the result, both of which work identically on a null-prototype object.
  */
 export function rowsToObjects(parsed: ParsedCsv): Record<string, string>[] {
+  // A repeated column name would silently overwrite the earlier one and leave the
+  // displaced field empty — a wrong row that still exits 0. None of the published
+  // files does this today, so treat it as the format having changed under us.
+  const seen = new Set<string>();
+  for (const name of parsed.header) {
+    if (name === "") continue; // padding cells are expected and carry no data
+    if (seen.has(name)) {
+      throw new BundeswahlParseError(
+        `Malformed CSV: duplicate column name "${name}" in the header — ` +
+          "values would silently overwrite each other, so the file is not usable as a key→value map.",
+      );
+    }
+    seen.add(name);
+  }
   return parsed.rows.map((row) => {
     const obj = Object.create(null) as Record<string, string>;
     for (let i = 0; i < parsed.header.length; i++) obj[parsed.header[i]!] = row[i] ?? "";

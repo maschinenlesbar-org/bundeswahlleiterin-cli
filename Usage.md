@@ -104,6 +104,7 @@ substring match: `--land Sachsen` also returns Niedersachsen and Sachsen-Anhalt,
 bundeswahl structure                       # all 299 Wahlkreise
 bundeswahl structure --wahlkreis 5         # one, by number (leading zeros ignored)
 bundeswahl structure --wahlkreis "Kiel"    # or by name substring
+bundeswahl structure --include-aggregates  # + the 17 official summary rows
 ```
 
 Each row is a **column→value map** of ~50 demographic/economic indicators (the
@@ -115,8 +116,18 @@ bundeswahl structure --wahlkreis 1 | jq '.[0] | keys_unsorted'
 
 Every value is a **string** in German number format (`"128,0"`) — convert with
 `sub(",";".") | tonumber` before comparing. Read the `Fußnoten` column: where a city
-forms several Wahlkreise (Berlin, Hamburg, München, Leipzig, …), most columns hold the
-city-wide value, so those Wahlkreise show identical figures.
+forms several Wahlkreise (Berlin, Hamburg, München, Leipzig, …), many columns hold the
+city-wide value, so those Wahlkreise show identical figures. Treat the footnote's column
+ranges as an **upper bound** — some columns inside them do vary per Wahlkreis (across
+Berlin's 12, Spalten 7, 8 and 17–20 each hold ~10 distinct values) — so check whether the
+values actually repeat before calling a column city-wide.
+
+> **The official Land/Bund totals are not in the default output.** The file carries 17
+> summary rows besides the 299 Wahlkreise — 16 `Land insgesamt` (Wahlkreis-Nr. 901–916)
+> and one national `Insgesamt` (999) — and they are excluded unless you pass
+> `--include-aggregates`. Use them for a Land or national figure: you cannot get there by
+> summing Wahlkreise, because for the city states several columns repeat one city-wide
+> value (see each row's `Fußnoten`), so a sum double-counts.
 
 ## Scripting recipes
 

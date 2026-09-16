@@ -91,3 +91,20 @@ test("parseGermanNumber handles decimals, thousands and placeholders", () => {
   assert.equal(parseGermanNumber("–"), null); // en-dash placeholder
   assert.equal(parseGermanNumber("nope"), null);
 });
+
+test("rowsToObjects rejects a duplicate column name instead of overwriting it", () => {
+  // Two "b" columns: the second would win and the displaced field would go empty,
+  // producing a wrong row that still exits 0. Fail loudly instead.
+  const parsed = parseCsv("a;b;c;b\n1;2;3;4\n", { headerFirstCell: "a" });
+  assert.throws(() => rowsToObjects(parsed), BundeswahlParseError);
+  assert.throws(() => rowsToObjects(parsed), /duplicate column name "b"/);
+});
+
+test("rowsToObjects tolerates repeated empty padding cells in the header", () => {
+  // The published files pad short header rows with trailing `;`, so empty column
+  // names repeat legitimately and must not trip the duplicate check.
+  const parsed = parseCsv("a;b;;\n1;2;;\n", { headerFirstCell: "a" });
+  const [row] = rowsToObjects(parsed);
+  assert.equal(row!["a"], "1");
+  assert.equal(row!["b"], "2");
+});

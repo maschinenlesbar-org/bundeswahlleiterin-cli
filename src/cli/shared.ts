@@ -44,6 +44,35 @@ export function parseNonEmpty(value: string): string {
 }
 
 /**
+ * commander value-parser for a free-text filter.
+ *
+ * Non-empty, and — the point of it — rejects a value that is really the *next
+ * option*. Without this, `--party --group-type` makes commander hand "--group-type"
+ * to `--party` as its value; the starved option is never applied and the filter
+ * matches nothing, so the user gets `[]` and exit 0. For election data an empty
+ * result must never be confusable with a real answer, which is the same reason
+ * parseCsvRows refuses to return a truncated file.
+ *
+ * Every dash-leading value is refused, with no escape hatch: commander hands the
+ * parser the same string for `--party -x` and `--party=-x`, so the two cannot be
+ * told apart here — and no Land, Wahlkreis, party or Gruppenart in this dataset
+ * begins with a dash, so nothing legitimate is lost.
+ */
+export function parseTextArg(value: string): string {
+  if (value.trim() === "") {
+    throw new InvalidArgumentError("Expected a non-empty value.");
+  }
+  if (/^--?[^\s]/.test(value)) {
+    throw new InvalidArgumentError(
+      `looks like a missing value — "${value}" is the next option, consumed because ` +
+        "this one was left without a value. No name or number in this dataset starts " +
+        "with a dash; supply the intended value.",
+    );
+  }
+  return value;
+}
+
+/**
  * commander value-parser for --base-url. The base URL is trusted input, but only
  * `http:`/`https:` are accepted so a stray `file:`/`ftp:` value fails at parse
  * time (exit 2) with a clear message rather than deep in the transport.

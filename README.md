@@ -63,7 +63,7 @@ bundeswahl structure --wahlkreis Kiel
 | `results` | Bundestagswahl 2025 results — one row per area × party × ballot (`--area-type`, `--area`, `--party`, `--vote`, `--group-type`) |
 | `parties` | The parties / groups reference list |
 | `wahlkreise` | The 299 constituencies (`--land <name\|abbr\|number>`) |
-| `structure` | Structural data (Strukturdaten) per Wahlkreis (`--wahlkreis <nr\|name>`) |
+| `structure` | Structural data (Strukturdaten) per Wahlkreis (`--wahlkreis <nr\|name>`, `--include-aggregates`) |
 
 New to terms like *Wahlkreis*, *Erststimme/Zweitstimme*, *kerg2*, *Gebietsart* or
 *Gruppenart*? The **[Glossary](GLOSSARY.md)** decodes every one.

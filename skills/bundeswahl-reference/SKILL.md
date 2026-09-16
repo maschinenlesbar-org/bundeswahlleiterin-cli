@@ -28,6 +28,7 @@ This skill drives the `bundeswahl` command. **Before anything else, validate it 
 bundeswahl parties                          # parties / groups (kurz + full name)
 bundeswahl wahlkreise [--land <name|abbr|nr>]  # the 299 constituencies
 bundeswahl structure [--wahlkreis <nr|name>]   # structural data per Wahlkreis
+bundeswahl structure --include-aggregates      # + the official Land/Bund summary rows
 ```
 
 - **parties** — each has `gruppenschluessel`, `gruppenartCsv` (`Partei` /
@@ -78,11 +79,18 @@ bundeswahl structure --wahlkreis 152 \
   `sub(",";".") | tonumber` before comparing or sorting (a plain string sort puts
   `"9,5"` above `"10,1"`).
 - **Read `Fußnoten` before comparing Wahlkreise.** Where a city forms several
-  Wahlkreise (Berlin, Hamburg, München, Köln, Leipzig, …), most columns hold the value
+  Wahlkreise (Berlin, Hamburg, München, Köln, Leipzig, …), many columns hold the value
   for the *whole city* (e.g. Leipzig II: "In den Spalten 1 und 7 bis 48 sind die Werte
-  für Leipzig insgesamt ausgewiesen"), so its Wahlkreise show identical figures. Some
+  für Leipzig insgesamt ausgewiesen"), so those Wahlkreise show identical figures. Some
   Kreise are split the same way (e.g. Wahlkreise 103/104, Kreis Mettmann). "Spalte n"
-  is the n-th column after `Wahlkreis-Name`. Say so rather than ranking such
-  Wahlkreise against each other.
+  is the n-th column after `Wahlkreis-Name` — the file's own `Spalten-Nr.` row confirms
+  that numbering. Say so rather than ranking such Wahlkreise against each other.
+  > **The footnote's ranges are an upper bound, not a guarantee.** Some columns inside
+  > them genuinely differ per Wahlkreis. Berlin's footnote lists "1, 7 bis 14 und 17 bis
+  > 48", but across its 12 Wahlkreise Spalten 7, 8 and 17–20 each hold ~10 distinct
+  > values, while 1, 9–14 and 33–48 are identical. So the safe test is the data, not the
+  > note: before declaring a column city-wide, check whether its values actually repeat
+  > across that city's Wahlkreise. (Every column that *is* identical falls inside the
+  > footnote's ranges, so the note never lets an identical column through unflagged.)
 - Actual vote counts/percentages → the **bundeswahl-results** skill.
 - **Cite the source** — "Quelle: Die Bundeswahlleiterin, Wiesbaden 2025".
