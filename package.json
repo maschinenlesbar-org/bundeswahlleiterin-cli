@@ -1,6 +1,6 @@
 {
   "name": "@maschinenlesbar.org/bundeswahlleiterin-cli",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "TypeScript API client and CLI for the Bundeswahlleiterin open data — German federal election (Bundestagswahl 2025) results, parties, constituencies and structural data",
   "type": "module",
   "bin": {
