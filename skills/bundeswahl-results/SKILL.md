@@ -7,8 +7,11 @@ description: >
   direct mandate in a constituency?", "election result for Bavaria / a Wahlkreis", "how
   high was turnout?", or wants first- or second-vote counts and percentages by
   Bund, Land or Wahlkreis, optionally filtered by party.
-version: 1.0.0
-userInvocable: true
+compatibility: >
+  Requires the `bundeswahl` CLI (npm package
+  @maschinenlesbar.org/bundeswahlleiterin-cli) on PATH, installed by the user;
+  the skill never installs it. Uses jq for JSON filtering. Network access to
+  www.bundeswahlleiterin.de.
 ---
 
 # Bundeswahl Results
@@ -20,6 +23,8 @@ party and ballot.
 ## Tooling
 
 This skill drives the `bundeswahl` command. **Before anything else, validate it is available** — run `command -v bundeswahl` (or `bundeswahl --version`). If it is not on your PATH, STOP and inform the user that the `bundeswahl` CLI (`@maschinenlesbar.org/bundeswahlleiterin-cli`) is not installed — installing it is their responsibility; never install it yourself, and do not fall back to `npx` or a local `node dist/...` build.
+
+This skill also filters JSON with `jq`. **Validate it too** — run `command -v jq`. If it is missing, inform the user that `jq` is not installed — installing it is their responsibility; never install it yourself — and carry on without it: filter the CLI output with `node -e` instead (Node is already on your PATH, since the CLI runs on it).
 
 **No API key is required** — the data is public open data, licensed **Datenlizenz Deutschland – Namensnennung 2.0**: free to reuse (including commercially) with attribution — cite "Quelle: Die Bundeswahlleiterin, Wiesbaden 2025". Use `--compact` when piping to `jq`.
 
