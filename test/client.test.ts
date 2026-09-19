@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BundeswahlClient, BTW2025 } from "../src/client/client.js";
-import { BundeswahlParseError } from "../src/client/errors.js";
+import { BundeswahlNetworkError, BundeswahlParseError } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -99,4 +99,15 @@ test("structure() hits its path and filters by Wahlkreis (leading zeros ignored,
   assert.equal((await c2.structure({ wahlkreis: "001" })).length, 1); // 001 -> 1
   const c3 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.structureCsv)).transport });
   assert.equal((await c3.structure({ wahlkreis: "münchen" }))[0]!["Wahlkreis-Nr."], "212");
+});
+
+test("a non-http(s) base URL is rejected by the client, never reaching a custom transport", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => csvResponse(fx.structureCsv));
+    assert.throws(
+      () => new BundeswahlClient({ baseUrl, transport: mt.transport }),
+      (err) => err instanceof BundeswahlNetworkError && /Unsupported protocol/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
 });

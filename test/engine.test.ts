@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RequestEngine } from "../src/client/engine.js";
-import { BundeswahlApiError, BundeswahlParseError } from "../src/client/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -98,4 +98,15 @@ test("a retried request that then succeeds resolves", async () => {
   const e = new RequestEngine({ transport: mt.transport, sleep: async () => {} });
   assert.equal(await e.getText("/x.csv"), "a;b\n1;2\n");
   assert.equal(calls, 2);
+});
+
+test("a non-http(s) base URL is rejected at construction, before any request", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+    assert.throws(
+      () => new RequestEngine({ baseUrl, transport: mt.transport }),
+      (err) => err instanceof BundeswahlNetworkError && /Unsupported protocol/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
 });
