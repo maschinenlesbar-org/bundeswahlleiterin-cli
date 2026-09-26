@@ -19,7 +19,7 @@ bundeswahl [global options] <command> [command options]
 | `--max-retries <n>` | retries for transient 429/503 responses (0..10; each waits the server's `Retry-After`, up to 30 s) |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
-| `-o, --output <file>` | write output to a file instead of stdout |
+| `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout) |
 | `-V, --version` / `-h, --help` | version / help |
 
 ## `results` — the election result

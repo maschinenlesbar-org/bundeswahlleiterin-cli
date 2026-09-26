@@ -88,6 +88,16 @@ export function parseTextArg(value: string): string {
 }
 
 /**
+ * commander value-parser for `-o, --output <file>`. A blank or whitespace-only path
+ * is a usage error: `-o ""` used to print to stdout silently and `-o " "` created a
+ * file named " ". `-` is kept as is and means stdout (see {@link renderJson}), the
+ * usual convention, rather than a file named "-".
+ */
+export function parseOutputPath(value: string): string {
+  return parseNonEmpty(value);
+}
+
+/**
  * commander value-parser for --base-url. The base URL is trusted input, but only
  * `http:`/`https:` are accepted so a stray `file:`/`ftp:` value fails at parse
  * time (exit 2) with a clear message rather than deep in the transport.
@@ -118,11 +128,13 @@ export function parseBaseUrl(value: string): string {
 
 /**
  * commander value-parser for a value that ends up in an HTTP header (User-Agent).
- * Rejects control characters — a CR/LF (or other C0/DEL byte) would otherwise reach
- * Node's HTTP layer and throw an opaque `ERR_INVALID_CHAR`. Tab (0x09) is allowed;
- * checked by char code so the source stays free of control bytes.
+ * Rejects a blank value (it used to fall back to the default silently) and control
+ * characters — a CR/LF (or other C0/DEL byte) would otherwise reach Node's HTTP
+ * layer and throw an opaque `ERR_INVALID_CHAR`. Tab (0x09) is allowed; checked by
+ * char code so the source stays free of control bytes.
  */
 export function parseHeaderValue(value: string): string {
+  parseNonEmpty(value);
   for (let i = 0; i < value.length; i++) {
     const c = value.charCodeAt(i);
     if ((c < 0x20 && c !== 0x09) || c === 0x7f) {
@@ -148,9 +160,7 @@ export function toEngineOptions(global: GlobalOptions): BundeswahlClientOptions 
   const options: BundeswahlClientOptions = {};
   if (global.baseUrl !== undefined) options.baseUrl = global.baseUrl;
   if (global.timeout !== undefined) options.timeoutMs = global.timeout;
-  if (global.userAgent !== undefined && global.userAgent.trim().length > 0) {
-    options.userAgent = global.userAgent;
-  }
+  if (global.userAgent !== undefined) options.userAgent = global.userAgent;
   if (global.maxRetries !== undefined) options.maxRetries = global.maxRetries;
   if (global.maxResponseBytes !== undefined) options.maxResponseBytes = global.maxResponseBytes;
   return options;
@@ -179,11 +189,11 @@ export function escapeControlChars(json: string): string {
 /**
  * Render a JSON value, pretty by default and compact with --compact. Writes to the
  * file given by --output (with a short stderr confirmation so stdout stays clean
- * for piping), or to stdout otherwise.
+ * for piping), or to stdout otherwise — also for `--output -`.
  */
 export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown): void {
   const text = escapeControlChars(global.compact ? JSON.stringify(value) : JSON.stringify(value, null, 2));
-  if (global.output) {
+  if (global.output !== undefined && global.output !== "-") {
     const data = Buffer.from(text + "\n", "utf8");
     try {
       // Refuse to overwrite an existing file unless --force: the exclusive ("wx")

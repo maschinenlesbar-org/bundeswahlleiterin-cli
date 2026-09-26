@@ -322,3 +322,27 @@ test("repeating a filter option is a usage error, not a silent last-one-wins", a
     assert.match(cli.err.join("\n"), /Given more than once; this option takes a single value\./);
   }
 });
+
+test("a blank --user-agent is a usage error, not a silent fallback to the default", async () => {
+  for (const ua of ["", "   "]) {
+    const cli = makeCli();
+    assert.equal(await run(["--user-agent", ua, "parties"], cli.deps), 2, JSON.stringify(ua));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /Expected a non-empty value/);
+  }
+});
+
+test("-o with a blank path is a usage error; -o - writes to stdout, not a file named '-'", async () => {
+  for (const path of ["", " "]) {
+    const cli = makeCli();
+    assert.equal(await run(["-o", path, "parties"], cli.deps), 2, JSON.stringify(path));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.deepEqual(cli.files, {});
+    assert.match(cli.err.join("\n"), /Expected a non-empty value/);
+  }
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "-o", "-", "parties"], cli.deps), 0);
+  assert.deepEqual(cli.files, {});
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
+  assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
+});
