@@ -131,3 +131,23 @@ test("wahlkreise() --land with an exact abbreviation matches only that Land, not
   assert.deepEqual(await land("BE"), ["BE"]);
   assert.deepEqual(await land("rhein"), ["NW", "RP"]); // a non-abbreviation is still a name substring
 });
+
+test("a duplicate column name is rejected in every dataset, not resolved last-wins", async () => {
+  const dupKerg = fx.kerg2Csv.replace(
+    ";Stimme;Anzahl;Prozent;VorpAnzahl;VorpProzent;",
+    ";Stimme;Anzahl;Prozent;Anzahl;Prozent;",
+  );
+  const dupWk = fx.wahlkreiseCsv.replace("LAND_NAME;LAND_ABK", "LAND_NAME;LAND_NAME");
+  const dupParties = fx.partiesCsv.replace("GruppennameKurz;Gruppenname", "Gruppenname;Gruppenname");
+  for (const [csv, call] of [
+    [dupKerg, (c: BundeswahlClient) => c.results()],
+    [dupWk, (c: BundeswahlClient) => c.wahlkreise()],
+    [dupParties, (c: BundeswahlClient) => c.parties()],
+  ] as const) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(
+      () => call(c),
+      (err) => err instanceof BundeswahlParseError && /duplicate column name/.test(err.message),
+    );
+  }
+});

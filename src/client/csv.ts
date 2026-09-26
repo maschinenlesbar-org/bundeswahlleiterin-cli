@@ -116,6 +116,28 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
 }
 
 /**
+ * Throw a BundeswahlParseError if a (non-empty) column name occurs twice in the
+ * header. A repeated name would silently resolve to one of the two columns — in
+ * kerg2 a second "Anzahl"/"Prozent" pair (the VorpAnzahl/VorpProzent position)
+ * reported the 2021 result as the 2025 one — or, in a key→value map, overwrite the
+ * earlier value: a wrong row that still exits 0. None of the published files does
+ * this, so treat it as the format having changed under us.
+ */
+export function assertUniqueHeader(header: readonly string[]): void {
+  const seen = new Set<string>();
+  for (const name of header) {
+    if (name === "") continue; // padding cells are expected and carry no data
+    if (seen.has(name)) {
+      throw new BundeswahlParseError(
+        `Malformed CSV: duplicate column name "${name}" in the header — ` +
+          "values would silently overwrite each other, so the file is not usable as a key→value map.",
+      );
+    }
+    seen.add(name);
+  }
+}
+
+/**
  * Map data rows to objects keyed by the header column names.
  *
  * The keys are attacker-controllable (they come from the CSV header row of a
@@ -127,20 +149,7 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
  * the result, both of which work identically on a null-prototype object.
  */
 export function rowsToObjects(parsed: ParsedCsv): Record<string, string>[] {
-  // A repeated column name would silently overwrite the earlier one and leave the
-  // displaced field empty — a wrong row that still exits 0. None of the published
-  // files does this today, so treat it as the format having changed under us.
-  const seen = new Set<string>();
-  for (const name of parsed.header) {
-    if (name === "") continue; // padding cells are expected and carry no data
-    if (seen.has(name)) {
-      throw new BundeswahlParseError(
-        `Malformed CSV: duplicate column name "${name}" in the header — ` +
-          "values would silently overwrite each other, so the file is not usable as a key→value map.",
-      );
-    }
-    seen.add(name);
-  }
+  assertUniqueHeader(parsed.header);
   return parsed.rows.map((row) => {
     const obj = Object.create(null) as Record<string, string>;
     for (let i = 0; i < parsed.header.length; i++) obj[parsed.header[i]!] = row[i] ?? "";

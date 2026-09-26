@@ -106,7 +106,9 @@ The dataset paths are exported as `BTW2025` for reference.
 - **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`.
 
 The client maps each dataset by header name (not fixed position), so the parsing
-survives a column being added or reordered.
+survives a column being added or reordered. A header that repeats a column name is
+rejected with a `BundeswahlParseError` in every dataset, since a lookup by name would
+silently pick one of the two.
 
 ## Architecture
 

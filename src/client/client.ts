@@ -9,7 +9,7 @@
 //   await c.wahlkreise({ land: "Bayern" });
 
 import { RequestEngine, type EngineOptions } from "./engine.js";
-import { parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
+import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
 import { BundeswahlParseError } from "./errors.js";
 import type {
   AreaType,
@@ -82,6 +82,9 @@ function parseDataset(text: string, headerFirstCell: string, path: string): Pars
         "the open-data file format may have changed.",
     );
   }
+  // Columns are looked up by name, so a repeated name would silently pick one of
+  // the two (the last) — refuse it for every dataset, not only `structure`.
+  assertUniqueHeader(parsed.header);
   return parsed;
 }
 
