@@ -151,3 +151,19 @@ test("a duplicate column name is rejected in every dataset, not resolved last-wi
     );
   }
 });
+
+test("a renamed or missing column is a parse error, not an all-null field or an empty filter", async () => {
+  for (const [csv, call, column] of [
+    [fx.kerg2Csv.replace(";Anzahl;", ";Stimmen;"), (c: BundeswahlClient) => c.results(), "Anzahl"],
+    [fx.wahlkreiseCsv.replace("LAND_ABK", "LAND_KZ"), (c: BundeswahlClient) => c.wahlkreise({ land: "BY" }), "LAND_ABK"],
+    [fx.partiesCsv.replace("GruppennameKurz", "Kurzname"), (c: BundeswahlClient) => c.parties(), "GruppennameKurz"],
+    [fx.structureCsv.replace("Wahlkreis-Nr.", "WKR"), (c: BundeswahlClient) => c.structure(), "Wahlkreis-Nr."],
+  ] as const) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(
+      () => call(c),
+      (err) => err instanceof BundeswahlParseError && err.message.includes(`Missing column "${column}"`),
+      column,
+    );
+  }
+});

@@ -68,13 +68,31 @@ function cell(row: string[], at: number): string {
   return at >= 0 ? (row[at] ?? "").trim() : "";
 }
 
+/** The columns each dataset's mapper reads; all must be present in the header. */
+const RESULT_COLUMNS = [
+  "Wahlart", "Wahltag", "Gebietsart", "Gebietsnummer", "Gebietsname", "UegGebietsart",
+  "UegGebietsnummer", "Gruppenart", "Gruppenname", "Gruppenreihenfolge", "Stimme", "Anzahl",
+  "Prozent", "VorpAnzahl", "VorpProzent", "DiffProzent", "DiffProzentPkt", "Bemerkung", "Gewählt",
+] as const;
+const PARTY_COLUMNS = ["Gruppenschluessel", "Gruppenart_XML", "Gruppenart_CSV", "GruppennameKurz", "Gruppenname"] as const;
+const WAHLKREIS_COLUMNS = ["WKR_NR", "WKR_NAME", "LAND_NR", "LAND_NAME", "LAND_ABK"] as const;
+const STRUCTURE_COLUMNS = ["Land", "Wahlkreis-Nr.", "Wahlkreis-Name"] as const;
+
 /**
- * `parseCsv`, but fail loudly if the expected header row is not found. Without
- * this, a `200` response that isn't the expected file (a replaced/moved dataset,
- * or an upstream column rename) would yield an empty header and the command would
- * silently return `[]` — indistinguishable from "no matches".
+ * `parseCsv`, but fail loudly if the file is not the expected one. Without this,
+ * a `200` response that isn't the expected file (a replaced/moved dataset, or an
+ * upstream column rename) would yield an empty header — or, for a renamed column,
+ * a field that is `""`/`null` in every row, or a filter that matches nothing — and
+ * the command would silently return data indistinguishable from a real answer.
+ * So: the header row must be found, and every column in `columns` (all the ones
+ * the mapper reads) must be in it.
  */
-function parseDataset(text: string, headerFirstCell: string, path: string): ParsedCsv {
+function parseDataset(
+  text: string,
+  headerFirstCell: string,
+  path: string,
+  columns: readonly string[],
+): ParsedCsv {
   const parsed = parseCsv(text, { headerFirstCell });
   if (parsed.header.length === 0) {
     throw new BundeswahlParseError(
@@ -85,6 +103,13 @@ function parseDataset(text: string, headerFirstCell: string, path: string): Pars
   // Columns are looked up by name, so a repeated name would silently pick one of
   // the two (the last) — refuse it for every dataset, not only `structure`.
   assertUniqueHeader(parsed.header);
+  const missing = columns.filter((c) => !parsed.header.includes(c));
+  if (missing.length > 0) {
+    throw new BundeswahlParseError(
+      `Missing column${missing.length > 1 ? "s" : ""} ${missing.map((c) => `"${c}"`).join(", ")} ` +
+        `in the header of ${path} — the open-data file format may have changed.`,
+    );
+  }
   return parsed;
 }
 
@@ -101,7 +126,7 @@ export class BundeswahlClient {
    */
   async results(query: ResultsQuery = {}): Promise<ResultRow[]> {
     const text = await this.engine.getText(BTW2025.results);
-    const parsed = parseDataset(text, "Wahlart", BTW2025.results);
+    const parsed = parseDataset(text, "Wahlart", BTW2025.results, RESULT_COLUMNS);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<ResultRow>((r) => {
       const stimmeRaw = cell(r, at("Stimme"));
@@ -151,7 +176,7 @@ export class BundeswahlClient {
   /** The parties / groups reference list (btw25_parteien). */
   async parties(): Promise<Party[]> {
     const text = await this.engine.getText(BTW2025.parties);
-    const parsed = parseDataset(text, "Gruppenschluessel", BTW2025.parties);
+    const parsed = parseDataset(text, "Gruppenschluessel", BTW2025.parties, PARTY_COLUMNS);
     const at = indexMap(parsed.header);
     return parsed.rows.map<Party>((r) => ({
       gruppenschluessel: cell(r, at("Gruppenschluessel")),
@@ -165,7 +190,7 @@ export class BundeswahlClient {
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
   async wahlkreise(opts: { land?: string } = {}): Promise<Wahlkreis[]> {
     const text = await this.engine.getText(BTW2025.wahlkreise);
-    const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise);
+    const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise, WAHLKREIS_COLUMNS);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<Wahlkreis>((r) => ({
       nr: cell(r, at("WKR_NR")),
@@ -208,7 +233,7 @@ export class BundeswahlClient {
    */
   async structure(opts: { wahlkreis?: string; includeAggregates?: boolean } = {}): Promise<StructureRow[]> {
     const text = await this.engine.getText(BTW2025.structure);
-    const parsed = parseDataset(text, "Land", BTW2025.structure);
+    const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);
     let rows = rowsToObjects(parsed);
     if (!opts.includeAggregates) {
       rows = rows.filter((r) => {

@@ -108,7 +108,9 @@ The dataset paths are exported as `BTW2025` for reference.
 The client maps each dataset by header name (not fixed position), so the parsing
 survives a column being added or reordered. A header that repeats a column name is
 rejected with a `BundeswahlParseError` in every dataset, since a lookup by name would
-silently pick one of the two.
+silently pick one of the two, and so is a header that lacks a column the mapper reads
+(a renamed `Anzahl` would otherwise make that field `null` in every row, and a renamed
+`LAND_ABK` would make `--land BY` return `[]`).
 
 ## Architecture
 
