@@ -246,14 +246,30 @@ export class RequestEngine {
    */
   async getText(path: string, query?: QueryParams): Promise<string> {
     const res = await this.request(path, query);
-    const text = res.data.toString("utf8");
-    const head = text.replace(/^﻿/, "").trimStart().slice(0, 200).toLowerCase();
-    if (head.startsWith("<!doctype html") || head.startsWith("<html")) {
-      throw new BundeswahlParseError(
+    const htmlPage = (): BundeswahlParseError =>
+      new BundeswahlParseError(
         `Expected a CSV file from ${path} but received an HTML page — the file may ` +
           "have moved, or --base-url points somewhere unexpected.",
       );
+    const looksLikeHtml = (t: string): boolean => {
+      const head = t.replace(/^\uFEFF/, "").trimStart().slice(0, 200).toLowerCase();
+      return head.startsWith("<!doctype html") || head.startsWith("<html");
+    };
+    // The pinned files are UTF-8 (the Wahlkreis file is the `…_utf8.csv` variant of
+    // one also published in another charset). Decode strictly: Buffer#toString would
+    // turn every non-UTF-8 byte into U+FFFD, so a re-pin to the wrong variant would
+    // pass unnoticed and every umlaut filter would silently match nothing.
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(res.data);
+    } catch {
+      if (looksLikeHtml(res.data.toString("latin1"))) throw htmlPage();
+      throw new BundeswahlParseError(
+        `The response from ${path} is not valid UTF-8 — the file may have been replaced by ` +
+          "a variant in another character set (e.g. Latin-1).",
+      );
     }
+    if (looksLikeHtml(text)) throw htmlPage();
     if (text.trim().length === 0) {
       throw new BundeswahlParseError(`Empty response from ${path} — no content (expected a CSV file).`);
     }

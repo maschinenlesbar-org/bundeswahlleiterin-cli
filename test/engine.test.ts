@@ -194,3 +194,20 @@ test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates", () => {
   }
   assert.equal(MAX_RETRY_AFTER_MS, 30_000);
 });
+
+test("getText rejects a body that is not valid UTF-8 instead of decoding it to U+FFFD", async () => {
+  const latin1 = Buffer.from("Gruppenschluessel;GruppennameKurz\n200;Wählende\n", "latin1");
+  const engine = new RequestEngine({ transport: makeMockTransport(() => rawResponse(latin1, "text/csv")).transport });
+  await assert.rejects(
+    () => engine.getText("/p.csv"),
+    (err: unknown) => err instanceof BundeswahlParseError && /from \/p\.csv is not valid UTF-8/.test(err.message),
+  );
+  // A Latin-1 HTML page is still reported as an HTML page.
+  const html = Buffer.from("<!doctype html><title>Ü</title>", "latin1");
+  const e2 = new RequestEngine({ transport: makeMockTransport(() => rawResponse(html, "text/html")).transport });
+  await assert.rejects(() => e2.getText("/p.csv"), (err: unknown) => err instanceof BundeswahlParseError && /HTML page/.test(err.message));
+  // UTF-8 with a BOM decodes, BOM dropped.
+  const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("a;ü\n", "utf8")]);
+  const e3 = new RequestEngine({ transport: makeMockTransport(() => rawResponse(bom, "text/csv")).transport });
+  assert.equal(await e3.getText("/p.csv"), "a;ü\n");
+});

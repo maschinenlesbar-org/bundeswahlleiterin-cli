@@ -131,7 +131,7 @@ src/
     types.ts     # ResultRow / Party / Wahlkreis / StructureRow + ResultsQuery
     query.ts     # dependency-free query-string builder
     http.ts      # the Transport interface + default node:http/https transport
-    engine.ts    # URL building, retry/backoff, getText (HTML/empty guards), errors
+    engine.ts    # URL building, retry/backoff, getText (strict UTF-8, HTML/empty guards), errors
     errors.ts    # BundeswahlError / …ApiError / …NetworkError / …ValidationError / …ParseError
     client.ts    # BundeswahlClient — results/parties/wahlkreise/structure (+ BTW2025 paths)
   cli/
