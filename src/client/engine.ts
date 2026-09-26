@@ -6,7 +6,7 @@
 
 import { nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError } from "./errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError, redactUrl } from "./errors.js";
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
 const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
@@ -104,15 +104,15 @@ function assertHttpScheme(baseUrl: string): void {
   try {
     url = new URL(baseUrl);
   } catch {
-    throw new BundeswahlNetworkError(`Invalid base URL: ${baseUrl}`);
+    throw new BundeswahlNetworkError(`Invalid base URL: ${redactUrl(baseUrl)}`);
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new BundeswahlNetworkError(
-      `Unsupported protocol "${url.protocol}" in base URL: ${baseUrl}`,
+      `Unsupported protocol "${url.protocol}" in base URL: ${redactUrl(baseUrl)}`,
     );
   }
   if (/[?#]/.test(baseUrl)) {
-    throw new BundeswahlNetworkError(`Base URL must not contain a query or fragment: ${baseUrl}`);
+    throw new BundeswahlNetworkError(`Base URL must not contain a query or fragment: ${redactUrl(baseUrl)}`);
   }
 }
 

@@ -16,6 +16,7 @@ export {
   BundeswahlNetworkError,
   BundeswahlValidationError,
   BundeswahlParseError,
+  redactUrl,
 } from "./errors.js";
 
 export * from "./types.js";

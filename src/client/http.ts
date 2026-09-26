@@ -8,7 +8,7 @@
 
 import http from "node:http";
 import https from "node:https";
-import { BundeswahlNetworkError } from "./errors.js";
+import { BundeswahlNetworkError, redactUrl } from "./errors.js";
 
 export interface HttpRequest {
   method: string;
@@ -48,14 +48,14 @@ export const nodeHttpTransport: Transport = (request) =>
     try {
       url = new URL(request.url);
     } catch {
-      reject(new BundeswahlNetworkError(`Invalid URL: ${request.url}`));
+      reject(new BundeswahlNetworkError(`Invalid URL: ${redactUrl(request.url)}`));
       return;
     }
 
     // Only http/https are supported. Reject anything else up front with a clear,
     // typed error instead of letting Node throw an opaque ERR_INVALID_PROTOCOL.
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      reject(new BundeswahlNetworkError(`Unsupported protocol "${url.protocol}" in URL: ${request.url}`));
+      reject(new BundeswahlNetworkError(`Unsupported protocol "${url.protocol}" in URL: ${redactUrl(request.url)}`));
       return;
     }
 

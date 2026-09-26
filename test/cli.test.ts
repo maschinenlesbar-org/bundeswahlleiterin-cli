@@ -296,3 +296,12 @@ test("a --base-url with a path prefix still works", async () => {
   assert.equal(await run(["--base-url", "https://mirror.example/bwl/", "parties"], cli.deps), 0);
   assert.match(cli.mt.last().url, /^https:\/\/mirror\.example\/bwl\/dam\/jcr\/.*btw25_parteien\.csv$/);
 });
+
+test("credentials in --base-url are redacted in error messages but still sent", async () => {
+  const cli = makeCli(() => rawResponse("not here", "text/plain", 404));
+  assert.equal(await run(["--base-url", "http://user:s3cret@127.0.0.1:18106/m", "parties"], cli.deps), 4);
+  const err = cli.err.join("\n");
+  assert.doesNotMatch(err, /s3cret|user:/);
+  assert.match(err, /HTTP 404 for GET http:\/\/\*\*\*@127\.0\.0\.1:18106\/m\/dam\/jcr\//);
+  assert.match(cli.mt.last().url, /^http:\/\/user:s3cret@127\.0\.0\.1:18106\//);
+});

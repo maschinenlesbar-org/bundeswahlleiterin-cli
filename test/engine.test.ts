@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RequestEngine } from "../src/client/engine.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError } from "../src/client/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -121,4 +121,17 @@ test("a base URL with a query or fragment is rejected at construction", () => {
       baseUrl,
     );
   }
+});
+
+test("redactUrl hides userinfo; base-URL errors never show the password", () => {
+  assert.equal(redactUrl("https://u:pw@h.test/x?y=1"), "https://***@h.test/x?y=1");
+  assert.equal(redactUrl("https://h.test/x"), "https://h.test/x");
+  assert.equal(redactUrl("not a url"), "not a url");
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "ftp://u:pw@h.test" }),
+    (err: unknown) => err instanceof BundeswahlNetworkError && !/pw/.test(err.message) && /\*\*\*@h\.test/.test(err.message),
+  );
+  const api = new BundeswahlApiError({ status: 500, url: "https://u:pw@h.test/x", method: "GET", body: "" });
+  assert.equal(api.url, "https://***@h.test/x");
+  assert.doesNotMatch(api.message, /pw/);
 });
