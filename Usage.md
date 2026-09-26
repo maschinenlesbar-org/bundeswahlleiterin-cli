@@ -96,7 +96,8 @@ bundeswahl wahlkreise --land 09       # …or number
 
 Each carries `nr`, `name`, and the Land (`landNr`, `landName`, `landAbk`). A name is a
 substring match: `--land Sachsen` also returns Niedersachsen and Sachsen-Anhalt, so use
-`SN` or `14` there.
+`SN` or `14` there. An exact abbreviation (case-insensitive) matches only its own Land —
+`--land HE` is Hessen alone, even though `he` also occurs in "Rheinland-Pfalz".
 
 ## `structure` — structural data per Wahlkreis
 

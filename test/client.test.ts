@@ -111,3 +111,23 @@ test("a non-http(s) base URL is rejected by the client, never reaching a custom 
     assert.equal(mt.calls.length, 0);
   }
 });
+
+test("wahlkreise() --land with an exact abbreviation matches only that Land, not name substrings", async () => {
+  const csv =
+    "WKR_NR;WKR_NAME;LAND_NR;LAND_NAME;LAND_ABK\n" +
+    "001;Flensburg – Schleswig;01;Schleswig-Holstein;SH\n" +
+    "088;Aachen I;05;Nordrhein-Westfalen;NW\n" +
+    "168;Kassel;06;Hessen;HE\n" +
+    "198;Mainz;07;Rheinland-Pfalz;RP\n" +
+    "258;Stuttgart I;08;Baden-Württemberg;BW\n" +
+    "075;Berlin-Mitte;11;Berlin;BE\n" +
+    "069;Magdeburg;15;Sachsen-Anhalt;ST\n";
+  const land = async (l: string) =>
+    (await new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport }).wahlkreise({ land: l }))
+      .map((w) => w.landAbk);
+  assert.deepEqual(await land("HE"), ["HE"]);
+  assert.deepEqual(await land("he"), ["HE"]);
+  assert.deepEqual(await land("ST"), ["ST"]);
+  assert.deepEqual(await land("BE"), ["BE"]);
+  assert.deepEqual(await land("rhein"), ["NW", "RP"]); // a non-abbreviation is still a name substring
+});

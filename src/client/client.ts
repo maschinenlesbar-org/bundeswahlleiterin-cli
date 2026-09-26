@@ -172,13 +172,21 @@ export class BundeswahlClient {
       landAbk: cell(r, at("LAND_ABK")),
     }));
     if (opts.land !== undefined) {
-      // A bare number matches the Land number ignoring leading zeros ("9" == "09");
-      // anything else matches the Land name (substring) or its abbreviation.
+      // A bare number matches the Land number ignoring leading zeros ("9" == "09").
+      // A value that is exactly a Land abbreviation (case-insensitive) matches only
+      // that Land: "HE" is also a substring of "Rheinland-Pfalz" and
+      // "Nordrhein-Westfalen", "ST" of "Holstein"/"Westfalen" and "BE" of
+      // "Baden-Württemberg", and the abbreviation is the documented way out of name
+      // ambiguity. Anything else is a Land name substring.
       const l = opts.land.trim();
+      const abk = l.toLowerCase();
+      const isAbbreviation = rows.some((w) => w.landAbk.toLowerCase() === abk);
       rows = rows.filter((w) =>
         isNumeric(l)
           ? sameNumber(w.landNr, l)
-          : includesCi(w.landName, l) || w.landAbk.toLowerCase() === l.toLowerCase(),
+          : isAbbreviation
+            ? w.landAbk.toLowerCase() === abk
+            : includesCi(w.landName, l),
       );
     }
     return rows;

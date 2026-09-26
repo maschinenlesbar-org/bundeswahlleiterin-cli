@@ -54,7 +54,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("wahlkreise")
     .description("The 299 constituencies (Wahlkreise), optionally filtered by Land")
-    .option("--land <land>", "only Wahlkreise in this Land (name, abbreviation or number)", parseTextArg)
+    .option("--land <land>", "only Wahlkreise in this Land: number, exact abbreviation (e.g. HE) or name substring", parseTextArg)
     .action(
       action(deps, async ({ client, global, opts }) => {
         const land = typeof opts["land"] === "string" ? opts["land"] : undefined;
