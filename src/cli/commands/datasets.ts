@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "../io.js";
 import type { AreaType, ResultsQuery, Vote } from "../../client/types.js";
-import { action, parseTextArg, renderJson } from "../shared.js";
+import { action, once, parseTextArg, renderJson } from "../shared.js";
 
 const AREA_TYPES: readonly AreaType[] = ["Bund", "Land", "Wahlkreis"];
 
@@ -29,11 +29,11 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("results")
     .description("Bundestagswahl 2025 results (by area, party and ballot)")
-    .option("--area-type <level>", "restrict to Bund | Land | Wahlkreis", parseAreaType)
-    .option("--area <nr-or-name>", "an area by number (leading zeros ignored) or name substring, e.g. 005 or Kiel; Land and Wahlkreis numbers overlap, so pair with --area-type", parseTextArg)
-    .option("--party <name>", "a party/group by name substring, e.g. SPD, GRÜNE", parseTextArg)
-    .option("--vote <1|2>", "restrict to 1 (Erststimme) or 2 (Zweitstimme)", parseVote)
-    .option("--group-type <type>", "restrict to a Gruppenart, e.g. Partei, System-Gruppe", parseTextArg)
+    .option("--area-type <level>", "restrict to Bund | Land | Wahlkreis", once(parseAreaType))
+    .option("--area <nr-or-name>", "an area by number (leading zeros ignored) or name substring, e.g. 005 or Kiel; Land and Wahlkreis numbers overlap, so pair with --area-type", once(parseTextArg))
+    .option("--party <name>", "a party/group by name substring, e.g. SPD, GRÜNE", once(parseTextArg))
+    .option("--vote <1|2>", "restrict to 1 (Erststimme) or 2 (Zweitstimme)", once(parseVote))
+    .option("--group-type <type>", "restrict to a Gruppenart, e.g. Partei, System-Gruppe", once(parseTextArg))
     .action(
       action(deps, async ({ client, global, opts }) => {
         const q: ResultsQuery = {};
@@ -54,7 +54,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("wahlkreise")
     .description("The 299 constituencies (Wahlkreise), optionally filtered by Land")
-    .option("--land <land>", "only Wahlkreise in this Land: number, exact abbreviation (e.g. HE) or name substring", parseTextArg)
+    .option("--land <land>", "only Wahlkreise in this Land: number, exact abbreviation (e.g. HE) or name substring", once(parseTextArg))
     .action(
       action(deps, async ({ client, global, opts }) => {
         const land = typeof opts["land"] === "string" ? opts["land"] : undefined;
@@ -68,7 +68,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
       "Structural data (Strukturdaten) for the 299 Wahlkreise; the official " +
         "Land/Bund summary rows are excluded unless --include-aggregates is passed",
     )
-    .option("--wahlkreis <nr-or-name>", "one Wahlkreis by number (leading zeros ignored) or name substring", parseTextArg)
+    .option("--wahlkreis <nr-or-name>", "one Wahlkreis by number (leading zeros ignored) or name substring", once(parseTextArg))
     .option(
       "--include-aggregates",
       'also return the official summary rows: 16 "Land insgesamt" (Wahlkreis-Nr. 901-916) ' +

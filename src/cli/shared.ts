@@ -44,6 +44,21 @@ export function parseNonEmpty(value: string): string {
 }
 
 /**
+ * Wrap a commander value-parser for a single-valued option: a second occurrence is
+ * a usage error instead of silently replacing the first (`--party SPD --party CDU`
+ * used to return only CDU). Only for options without a default, since commander
+ * passes the default as `previous` on the first call.
+ */
+export function once<T>(parse: (value: string) => T): (value: string, previous: T | undefined) => T {
+  return (value, previous) => {
+    if (previous !== undefined) {
+      throw new InvalidArgumentError("Given more than once; this option takes a single value.");
+    }
+    return parse(value);
+  };
+}
+
+/**
  * commander value-parser for a free-text filter.
  *
  * Non-empty, and — the point of it — rejects a value that is really the *next

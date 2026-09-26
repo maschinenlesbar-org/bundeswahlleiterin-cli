@@ -305,3 +305,20 @@ test("credentials in --base-url are redacted in error messages but still sent", 
   assert.match(err, /HTTP 404 for GET http:\/\/\*\*\*@127\.0\.0\.1:18106\/m\/dam\/jcr\//);
   assert.match(cli.mt.last().url, /^http:\/\/user:s3cret@127\.0\.0\.1:18106\//);
 });
+
+test("repeating a filter option is a usage error, not a silent last-one-wins", async () => {
+  for (const args of [
+    ["results", "--party", "SPD", "--party", "CDU"],
+    ["results", "--area", "Kiel", "--area", "001"],
+    ["results", "--area-type", "Bund", "--area-type", "Land"],
+    ["results", "--vote", "1", "--vote", "2"],
+    ["results", "--group-type", "Partei", "--group-type", "System-Gruppe"],
+    ["wahlkreise", "--land", "BY", "--land", "SN"],
+    ["structure", "--wahlkreis", "1", "--wahlkreis", "2"],
+  ]) {
+    const cli = makeCli();
+    assert.equal(await run(args, cli.deps), 2, args.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /Given more than once; this option takes a single value\./);
+  }
+});
