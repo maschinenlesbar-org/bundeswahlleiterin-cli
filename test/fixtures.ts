@@ -13,8 +13,7 @@ export const kerg2Csv =
   "BT;23.02.2025;Bund;99;Bundesgebiet;;;System-Gruppe;Wahlberechtigte;-4;;60510631;;61172771;;-1,08241;;;\n" +
   "BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;GRÜNE;3;2;5762380;11,606116;6814408;14,718457;-15,438289;-3,112341;;\n" +
   "BT;23.02.2025;Wahlkreis;005;Kiel;LAND;01;Partei;SPD;1;1;36690;22,076344;40000;25,0;-8,3;-2,9;;GRÜNE\n" +
-  "BT;23.02.2025;Wahlkreis;005;Kiel;LAND;01;Partei;GRÜNE;3;1;43281;26,042143;38000;24,0;13,9;2,0;;GRÜNE\n" +
-  "BT;23.02.2025;Wahlkreis;006;Ragged\n"; // a truncated line with no group (dropped)
+  "BT;23.02.2025;Wahlkreis;005;Kiel;LAND;01;Partei;GRÜNE;3;1;43281;26,042143;38000;24,0;13,9;2,0;;GRÜNE\n";
 
 /** Parties reference (btw25_parteien): `#`-commented preamble, header, rows. */
 export const partiesCsv =

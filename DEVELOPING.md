@@ -110,7 +110,9 @@ survives a column being added or reordered. A header that repeats a column name 
 rejected with a `BundeswahlParseError` in every dataset, since a lookup by name would
 silently pick one of the two, and so is a header that lacks a column the mapper reads
 (a renamed `Anzahl` would otherwise make that field `null` in every row, and a renamed
-`LAND_ABK` would make `--land BY` return `[]`).
+`LAND_ABK` would make `--land BY` return `[]`). The published files are rectangular, so
+a data row with more or fewer cells than the header is rejected too: that is a body cut
+off mid-row, whose last number may be cut at its decimal comma.
 
 ## Architecture
 

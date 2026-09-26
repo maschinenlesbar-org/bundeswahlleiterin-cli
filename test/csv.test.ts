@@ -37,7 +37,7 @@ test("parseCsv strips the BOM and skips the preamble to the named header row", (
   const parsed = parseCsv(fx.kerg2Csv, { headerFirstCell: "Wahlart" });
   assert.equal(parsed.header[0], "Wahlart"); // no leftover BOM on the first cell
   assert.equal(parsed.header[2], "Gebietsart");
-  assert.equal(parsed.rows.length, 5); // data rows, preamble dropped (client drops the ghost row)
+  assert.equal(parsed.rows.length, 4); // data rows, preamble dropped
   assert.equal(parsed.rows[0]![8], "Wahlberechtigte");
 });
 

@@ -110,6 +110,19 @@ function parseDataset(
         `in the header of ${path} — the open-data file format may have changed.`,
     );
   }
+  // The published files are rectangular: every data row has exactly as many cells
+  // as the header. A shorter row is a body cut off mid-row (a proxy or CDN ending a
+  // chunked response early, a partial upload upstream) whose last number may be cut
+  // at its decimal comma ("15," read as 15); a longer one is not the format we map.
+  // Either way the file is not usable, like an unterminated quote in parseCsvRows.
+  parsed.rows.forEach((row, i) => {
+    if (row.length !== parsed.header.length) {
+      throw new BundeswahlParseError(
+        `Malformed CSV: data row ${i + 1} of ${path} has ${row.length} cells, the header has ` +
+          `${parsed.header.length} — the file is truncated or not rectangular.`,
+      );
+    }
+  });
   return parsed;
 }
 
@@ -152,11 +165,6 @@ export class BundeswahlClient {
         gewaehlt: cell(r, at("Gewählt")),
       };
     });
-
-    // Drop malformed/truncated lines: a real result row always names a group, so a
-    // row with no `gruppenname` is not a data row (a ghost from a short line — which
-    // also lacks the columns before it, so this one check is enough).
-    rows = rows.filter((r) => r.gruppenname !== "");
 
     if (query.areaType) rows = rows.filter((r) => r.gebietsart === query.areaType);
     if (query.area !== undefined) {

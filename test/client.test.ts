@@ -40,12 +40,21 @@ test("results() filters by area-type, area (number+name), party, vote and group-
   assert.equal((await c().results({ party: "nonesuch" })).length, 0);
 });
 
-test("results() drops truncated rows that name no group (F4)", async () => {
-  const mt = makeMockTransport(() => csvResponse(fx.kerg2Csv));
-  const c = new BundeswahlClient({ transport: mt.transport });
-  const rows = await c.results();
-  assert.ok(rows.every((r) => r.gruppenname !== ""));
-  assert.ok(!rows.some((r) => r.gebietsname === "Ragged"));
+test("a truncated or ragged data row is a parse error, not a half-parsed row", async () => {
+  for (const [csv, cells] of [
+    [fx.kerg2Csv + "BT;23.02.2025;Wahlkreis;006;Ragged\n", 5], // cut before the group
+    [fx.kerg2Csv + "BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;GRÜNE;3;2;451510;12,609074;521411;15,", 15], // cut at a decimal comma
+    [fx.kerg2Csv + "BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;SPD;1;2;1;1;1;1;1;1;;;extra\n", 20],
+  ] as const) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(
+      () => c.results(),
+      (err) =>
+        err instanceof BundeswahlParseError &&
+        err.message.includes(`data row 5 of ${BTW2025.results} has ${cells} cells, the header has 19`),
+      String(cells),
+    );
+  }
 });
 
 test("results() carries the Gewählt winner name on Wahlkreis rows", async () => {
