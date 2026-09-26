@@ -189,3 +189,14 @@ test("a malformed number or Stimme in kerg2 is a parse error naming the cell, no
     await assert.rejects(() => c.results(), (err) => err instanceof BundeswahlParseError && message.test(err.message));
   }
 });
+
+test("name filters match across NFD umlauts and hyphen vs en dash", async () => {
+  const kerg = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
+  assert.equal((await kerg().results({ party: "GRU\u0308NE", areaType: "Bund" })).length, 1); // NFD Ü
+  const wk = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.wahlkreiseCsv)).transport });
+  const st = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.structureCsv)).transport });
+  assert.equal((await st().structure({ wahlkreis: "Flensburg - Schleswig" }))[0]!["Wahlkreis-Nr."], "1"); // "-" vs "–"
+  assert.equal((await st().structure({ wahlkreis: "Flensburg — Schleswig" })).length, 1); // em dash
+  assert.equal((await st().structure({ wahlkreis: "Mu\u0308nchen" }))[0]!["Wahlkreis-Nr."], "212"); // NFD ü
+  assert.equal((await wk().wahlkreise({ land: "Schleswig\u2010Holstein" })).length, 2); // U+2010 hyphen
+});

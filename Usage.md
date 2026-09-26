@@ -63,7 +63,9 @@ bundeswahl results --area-type Bund --group-type System-Gruppe \
 > (`Kiel`). Land and Wahlkreis numbers overlap (`--area 14` returns Land 14 Sachsen and
 > Wahlkreis 014), and names match as substrings (`Sachsen` also matches Niedersachsen
 > and Sachsen-Anhalt), so combine `--area` with `--area-type`. `--party` /
-> `--group-type` are case-insensitive substrings. `--vote` accepts `1`/`erst` and
+> `--group-type` are case-insensitive substrings. Every name match ignores Unicode
+> normalisation (a decomposed `ü` matches) and treats `-`, `–` and `—` alike, so
+> `"Flensburg - Schleswig"` finds `Flensburg – Schleswig`. `--vote` accepts `1`/`erst` and
 > `2`/`zweit`.
 >
 > `anzahl`/`prozent` are `null` for parties without a candidate or list in the area —

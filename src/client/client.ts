@@ -42,9 +42,19 @@ export const BTW2025 = {
 /** Options for the client (engine options only — the open data needs no auth). */
 export type BundeswahlClientOptions = EngineOptions;
 
-/** Case-insensitive substring test that tolerates empty needles/haystacks. */
+/**
+ * Comparison form of a name or filter value: NFC-normalised (a decomposed umlaut,
+ * as macOS file names and some input methods produce, matches the files' composed
+ * one), lower-cased, and with every dash variant (hyphen, en/em dash, minus sign…)
+ * folded to "-" — 93 Wahlkreis names use " – " (U+2013) where users type "-".
+ */
+function fold(text: string): string {
+  return text.normalize("NFC").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-");
+}
+
+/** Case-, normalisation- and dash-insensitive substring test (see {@link fold}). */
 function includesCi(haystack: string, needle: string): boolean {
-  return haystack.toLowerCase().includes(needle.trim().toLowerCase());
+  return fold(haystack).includes(fold(needle.trim()));
 }
 
 /** True when the value is a plain run of digits (a bare area/Land number). */
@@ -235,13 +245,13 @@ export class BundeswahlClient {
       // "Baden-Württemberg", and the abbreviation is the documented way out of name
       // ambiguity. Anything else is a Land name substring.
       const l = opts.land.trim();
-      const abk = l.toLowerCase();
-      const isAbbreviation = rows.some((w) => w.landAbk.toLowerCase() === abk);
+      const abk = fold(l);
+      const isAbbreviation = rows.some((w) => fold(w.landAbk) === abk);
       rows = rows.filter((w) =>
         isNumeric(l)
           ? sameNumber(w.landNr, l)
           : isAbbreviation
-            ? w.landAbk.toLowerCase() === abk
+            ? fold(w.landAbk) === abk
             : includesCi(w.landName, l),
       );
     }
