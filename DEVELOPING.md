@@ -153,7 +153,10 @@ calling `process.exit`).
 [`errors.ts`](src/client/errors.ts): `BundeswahlApiError` (non-2xx, carries
 `status`/`detail`, with `isRetryable`/`isNotFound`), `BundeswahlNetworkError`
 (transport failure/timeout), `BundeswahlParseError` (the body was not CSV — usually
-an HTML page), and `BundeswahlValidationError` (a client-side usage error), all
+an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
+before any request: a base URL that is not http(s) or has a query/fragment, a numeric
+option outside its range, an unknown `areaType`, a `vote` other than `1`/`2`, or a
+blank text filter — the library applies the same rules as the CLI's parsers), all
 extending `BundeswahlError`.
 
 ## Testing

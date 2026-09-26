@@ -10,7 +10,7 @@
 
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
 import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
-import { BundeswahlParseError } from "./errors.js";
+import { BundeswahlParseError, BundeswahlValidationError } from "./errors.js";
 import type {
   AreaType,
   Party,
@@ -55,6 +55,23 @@ function fold(text: string): string {
 /** Case-, normalisation- and dash-insensitive substring test (see {@link fold}). */
 function includesCi(haystack: string, needle: string): boolean {
   return fold(haystack).includes(fold(needle.trim()));
+}
+
+const AREA_TYPES: readonly AreaType[] = ["Bund", "Land", "Wahlkreis"];
+
+/**
+ * Library-side validation of a text filter, matching the CLI's parse-time rule: a
+ * blank value would match every row (an empty substring), so it is refused rather
+ * than read as "no filter". Throws BundeswahlValidationError; no request is made.
+ */
+function textFilter(name: string, value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new BundeswahlValidationError(
+      `Invalid ${name}: expected a non-empty string, got ${JSON.stringify(value) ?? String(value)}.`,
+    );
+  }
+  return value;
 }
 
 /** True when the value is a plain run of digits (a bare area/Land number). */
@@ -148,6 +165,29 @@ export class BundeswahlClient {
    * `query` filters client-side by area level/name, party/group, and ballot.
    */
   async results(query: ResultsQuery = {}): Promise<ResultRow[]> {
+    // Validate before fetching, as the CLI does at parse time: for a library caller a
+    // lower-case "bund", a string "2" or a blank party used to match nothing (or
+    // everything) silently. areaType is case-insensitive, like --area-type.
+    const q = query as Record<string, unknown>;
+    let areaType: AreaType | undefined;
+    if (q["areaType"] !== undefined) {
+      const raw = q["areaType"];
+      areaType = AREA_TYPES.find((a) => typeof raw === "string" && a.toLowerCase() === raw.trim().toLowerCase());
+      if (areaType === undefined) {
+        throw new BundeswahlValidationError(
+          `Invalid areaType: expected one of ${AREA_TYPES.join(", ")}, got ${JSON.stringify(raw) ?? String(raw)}.`,
+        );
+      }
+    }
+    if (q["vote"] !== undefined && q["vote"] !== 1 && q["vote"] !== 2) {
+      throw new BundeswahlValidationError(
+        `Invalid vote: expected 1 (Erststimme) or 2 (Zweitstimme), got ${JSON.stringify(q["vote"]) ?? String(q["vote"])}.`,
+      );
+    }
+    const area = textFilter("area", q["area"]);
+    const party = textFilter("party", q["party"]);
+    const groupType = textFilter("groupType", q["groupType"]);
+
     const text = await this.engine.getText(BTW2025.results);
     const parsed = parseDataset(text, "Wahlart", BTW2025.results, RESULT_COLUMNS);
     const at = indexMap(parsed.header);
@@ -196,18 +236,18 @@ export class BundeswahlClient {
       };
     });
 
-    if (query.areaType) rows = rows.filter((r) => r.gebietsart === query.areaType);
-    if (query.area !== undefined) {
+    if (areaType !== undefined) rows = rows.filter((r) => r.gebietsart === areaType);
+    if (area !== undefined) {
       // A bare number matches the area number ignoring leading zeros ("5" == "005");
       // anything else is a case-insensitive name substring.
-      const a = query.area.trim();
+      const a = area.trim();
       rows = isNumeric(a)
         ? rows.filter((r) => sameNumber(r.gebietsnummer, a))
         : rows.filter((r) => includesCi(r.gebietsname, a));
     }
-    if (query.party !== undefined) rows = rows.filter((r) => includesCi(r.gruppenname, query.party!));
+    if (party !== undefined) rows = rows.filter((r) => includesCi(r.gruppenname, party));
     if (query.vote !== undefined) rows = rows.filter((r) => r.stimme === (query.vote as Vote));
-    if (query.groupType !== undefined) rows = rows.filter((r) => includesCi(r.gruppenart, query.groupType!));
+    if (groupType !== undefined) rows = rows.filter((r) => includesCi(r.gruppenart, groupType));
     return rows;
   }
 
@@ -227,6 +267,7 @@ export class BundeswahlClient {
 
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
   async wahlkreise(opts: { land?: string } = {}): Promise<Wahlkreis[]> {
+    const land = textFilter("land", opts.land);
     const text = await this.engine.getText(BTW2025.wahlkreise);
     const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise, WAHLKREIS_COLUMNS);
     const at = indexMap(parsed.header);
@@ -237,14 +278,14 @@ export class BundeswahlClient {
       landName: cell(r, at("LAND_NAME")),
       landAbk: cell(r, at("LAND_ABK")),
     }));
-    if (opts.land !== undefined) {
+    if (land !== undefined) {
       // A bare number matches the Land number ignoring leading zeros ("9" == "09").
       // A value that is exactly a Land abbreviation (case-insensitive) matches only
       // that Land: "HE" is also a substring of "Rheinland-Pfalz" and
       // "Nordrhein-Westfalen", "ST" of "Holstein"/"Westfalen" and "BE" of
       // "Baden-Württemberg", and the abbreviation is the documented way out of name
       // ambiguity. Anything else is a Land name substring.
-      const l = opts.land.trim();
+      const l = land.trim();
       const abk = fold(l);
       const isAbbreviation = rows.some((w) => fold(w.landAbk) === abk);
       rows = rows.filter((w) =>
@@ -270,6 +311,7 @@ export class BundeswahlClient {
    * Wahlkreis number (leading zeros ignored) or name substring.
    */
   async structure(opts: { wahlkreis?: string; includeAggregates?: boolean } = {}): Promise<StructureRow[]> {
+    const wahlkreis = textFilter("wahlkreis", opts.wahlkreis);
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);
     let rows = rowsToObjects(parsed);
@@ -279,8 +321,8 @@ export class BundeswahlClient {
         return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= 299;
       });
     }
-    if (opts.wahlkreis !== undefined) {
-      const w = opts.wahlkreis.trim();
+    if (wahlkreis !== undefined) {
+      const w = wahlkreis.trim();
       const wNum = w.replace(/^0+/, "");
       rows = rows.filter((row) => {
         const nr = (row["Wahlkreis-Nr."] ?? "").replace(/^0+/, "");

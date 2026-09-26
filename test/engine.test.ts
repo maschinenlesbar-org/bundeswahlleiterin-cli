@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter } from "../src/client/engine.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
+import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter } from "../src/client/engine.js";
+import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -105,7 +105,7 @@ test("a non-http(s) base URL is rejected at construction, before any request", (
     const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
     assert.throws(
       () => new RequestEngine({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof BundeswahlNetworkError && /Unsupported protocol/.test(err.message),
+      (err) => err instanceof BundeswahlValidationError && /Unsupported protocol/.test(err.message),
     );
     assert.equal(mt.calls.length, 0);
   }
@@ -117,7 +117,7 @@ test("a base URL with a query or fragment is rejected at construction", () => {
     assert.throws(
       () => new RequestEngine({ transport: mt.transport, baseUrl }),
       (err: unknown) =>
-        err instanceof BundeswahlNetworkError && /Base URL must not contain a query or fragment/.test(err.message),
+        err instanceof BundeswahlValidationError && /Base URL must not contain a query or fragment/.test(err.message),
       baseUrl,
     );
   }
@@ -129,7 +129,7 @@ test("redactUrl hides userinfo; base-URL errors never show the password", () => 
   assert.equal(redactUrl("not a url"), "not a url");
   assert.throws(
     () => new RequestEngine({ baseUrl: "ftp://u:pw@h.test" }),
-    (err: unknown) => err instanceof BundeswahlNetworkError && !/pw/.test(err.message) && /\*\*\*@h\.test/.test(err.message),
+    (err: unknown) => err instanceof BundeswahlValidationError && !/pw/.test(err.message) && /\*\*\*@h\.test/.test(err.message),
   );
   const api = new BundeswahlApiError({ status: 500, url: "https://u:pw@h.test/x", method: "GET", body: "" });
   assert.equal(api.url, "https://***@h.test/x");
@@ -210,4 +210,28 @@ test("getText rejects a body that is not valid UTF-8 instead of decoding it to U
   const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("a;ü\n", "utf8")]);
   const e3 = new RequestEngine({ transport: makeMockTransport(() => rawResponse(bom, "text/csv")).transport });
   assert.equal(await e3.getText("/p.csv"), "a;ü\n");
+});
+
+test("numeric engine options outside their range are rejected at construction", () => {
+  for (const [name, value] of [
+    ["timeoutMs", -1],
+    ["timeoutMs", Number.NaN],
+    ["timeoutMs", 1.5],
+    ["timeoutMs", 2 ** 31],
+    ["maxRetries", Number.POSITIVE_INFINITY],
+    ["maxRetries", 11],
+    ["retryDelayMs", -5],
+    ["retryDelayMs", 30_001],
+    ["maxResponseBytes", -1],
+  ] as const) {
+    assert.throws(
+      () => new RequestEngine({ [name]: value }),
+      (err: unknown) =>
+        err instanceof BundeswahlValidationError &&
+        err.message.startsWith(`Invalid option ${name}: expected an integer from 0 to `),
+      `${name}=${value}`,
+    );
+  }
+  assert.doesNotThrow(() => new RequestEngine({ timeoutMs: 0, maxRetries: 10, retryDelayMs: 0, maxResponseBytes: 0 }));
+  assert.equal(MAX_RETRIES, 10);
 });

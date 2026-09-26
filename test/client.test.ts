@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BundeswahlClient, BTW2025 } from "../src/client/client.js";
-import { BundeswahlNetworkError, BundeswahlParseError } from "../src/client/errors.js";
+import { BundeswahlValidationError, BundeswahlParseError } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -115,7 +115,7 @@ test("a non-http(s) base URL is rejected by the client, never reaching a custom 
     const mt = makeMockTransport(() => csvResponse(fx.structureCsv));
     assert.throws(
       () => new BundeswahlClient({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof BundeswahlNetworkError && /Unsupported protocol/.test(err.message),
+      (err) => err instanceof BundeswahlValidationError && /Unsupported protocol/.test(err.message),
     );
     assert.equal(mt.calls.length, 0);
   }
@@ -199,4 +199,26 @@ test("name filters match across NFD umlauts and hyphen vs en dash", async () => 
   assert.equal((await st().structure({ wahlkreis: "Flensburg — Schleswig" })).length, 1); // em dash
   assert.equal((await st().structure({ wahlkreis: "Mu\u0308nchen" }))[0]!["Wahlkreis-Nr."], "212"); // NFD ü
   assert.equal((await wk().wahlkreise({ land: "Schleswig\u2010Holstein" })).length, 2); // U+2010 hyphen
+});
+
+test("the library validates its filters before any request, like the CLI", async () => {
+  const bad: Array<[string, (c: BundeswahlClient) => Promise<unknown>, RegExp]> = [
+    ["areaType", (c) => c.results({ areaType: "Kreis" as never }), /Invalid areaType: expected one of Bund, Land, Wahlkreis, got "Kreis"/],
+    ["vote", (c) => c.results({ vote: "2" as never }), /Invalid vote: expected 1 \(Erststimme\) or 2 \(Zweitstimme\), got "2"/],
+    ["vote", (c) => c.results({ vote: 3 as never }), /Invalid vote: .* got 3/],
+    ["area", (c) => c.results({ area: "" }), /Invalid area: expected a non-empty string, got ""/],
+    ["party", (c) => c.results({ party: "  " }), /Invalid party: expected a non-empty string/],
+    ["groupType", (c) => c.results({ groupType: "" }), /Invalid groupType/],
+    ["land", (c) => c.wahlkreise({ land: "" }), /Invalid land/],
+    ["wahlkreis", (c) => c.structure({ wahlkreis: " " }), /Invalid wahlkreis/],
+  ];
+  for (const [name, call, message] of bad) {
+    const mt = makeMockTransport(() => csvResponse(fx.kerg2Csv));
+    const c = new BundeswahlClient({ transport: mt.transport });
+    await assert.rejects(() => call(c), (err) => err instanceof BundeswahlValidationError && message.test(err.message), name);
+    assert.equal(mt.calls.length, 0, name);
+  }
+  // areaType is case-insensitive, like --area-type.
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
+  assert.equal((await c.results({ areaType: "bund" as never })).length, 2);
 });
