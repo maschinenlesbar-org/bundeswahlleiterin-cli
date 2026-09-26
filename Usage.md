@@ -13,7 +13,7 @@ bundeswahl [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--base-url <url>` | data host base URL (only `http:`/`https:` accepted) |
+| `--base-url <url>` | data host base URL (only `http:`/`https:` accepted; no query or fragment) |
 | `--timeout <ms>` | time limit per request in ms, whole response included (0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value |
 | `--max-retries <n>` | retries for transient 429/503 responses (0..10) |

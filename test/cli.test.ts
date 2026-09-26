@@ -275,3 +275,24 @@ test("--include-aggregates makes an aggregate reachable by its number", async ()
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!["Land"], "Schleswig-Holstein");
 });
+
+test("a --base-url with a query, a fragment or surrounding whitespace is a usage error", async () => {
+  for (const [baseUrl, message] of [
+    ["http://127.0.0.1:18106/m/s404?x=1", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106/m/s404#frag", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106?", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106/m/s404 ", /cannot have surrounding whitespace/],
+    [" https://www.bundeswahlleiterin.de", /cannot have surrounding whitespace/],
+  ] as const) {
+    const cli = makeCli();
+    assert.equal(await run(["--base-url", baseUrl, "parties"], cli.deps), 2, baseUrl);
+    assert.equal(cli.mt.calls.length, 0, baseUrl);
+    assert.match(cli.err.join("\n"), message, baseUrl);
+  }
+});
+
+test("a --base-url with a path prefix still works", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--base-url", "https://mirror.example/bwl/", "parties"], cli.deps), 0);
+  assert.match(cli.mt.last().url, /^https:\/\/mirror\.example\/bwl\/dam\/jcr\/.*btw25_parteien\.csv$/);
+});
