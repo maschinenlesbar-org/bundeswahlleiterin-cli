@@ -49,7 +49,7 @@ bundeswahl results --area-type Bund --vote 2 --party SPD
 bundeswahl results --area-type Wahlkreis --area Kiel --vote 1 --group-type Partei \
   | jq -r 'map(select(.anzahl != null)) | sort_by(-.anzahl)[] | "\(.gruppenname)\t\(.anzahl)\t\(.prozent)%"'
 
-# The 299 constituencies in Bavaria
+# The 47 constituencies in Bavaria
 bundeswahl wahlkreise --land Bayern | jq -r '.[].name'
 
 # Structural data for one Wahlkreis
@@ -113,7 +113,7 @@ Use `--compact` for single-line JSON and `-o <file>` to write to a file — both
 ## Troubleshooting
 
 - **`command not found: bundeswahl`** — the global npm bin directory isn't on your
-  `PATH`. Run `npm bin -g` to find it and add it, or run via
+  `PATH`. Add `$(npm prefix -g)/bin` to it (`npm bin` was removed in npm 9), or run via
   `npx @maschinenlesbar.org/bundeswahlleiterin-cli …`.
 - **Exit `4` / "not found"** — a data file moved. The Bundeswahlleiterin open-data
   URLs (some behind `dam/jcr` identifiers) are pinned in the client; if the section

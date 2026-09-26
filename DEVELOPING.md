@@ -92,7 +92,7 @@ at once.
 | `results(query?)` | kerg2 | `ResultRow[]` — filter by `areaType`/`area`/`party`/`vote`/`groupType` |
 | `parties()` | btw25_parteien | `Party[]` |
 | `wahlkreise({ land? })` | btw25_wahlkreisnamen | `Wahlkreis[]` |
-| `structure({ wahlkreis? })` | btw2025_strukturdaten | `StructureRow[]` (column→value map) |
+| `structure({ wahlkreis?, includeAggregates? })` | btw2025_strukturdaten | `StructureRow[]` (column→value map; `includeAggregates` keeps the 17 Land/Bund summary rows) |
 
 The dataset paths are exported as `BTW2025` for reference.
 

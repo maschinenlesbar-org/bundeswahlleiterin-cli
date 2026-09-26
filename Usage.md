@@ -20,6 +20,7 @@ bundeswahl [global options] <command> [command options]
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout) |
+| `-f, --force` | with `--output`, overwrite the file if it already exists (without it, an existing file is never overwritten) |
 | `-V, --version` / `-h, --help` | version / help |
 
 ## `results` — the election result
