@@ -90,6 +90,10 @@ bundeswahl results --area-type Bund --group-type System-Gruppe \
   (`stimme` 1 and 2; `Übrige` has only previous-election values). Exclude them with
   `--group-type Partei` unless you want turnout numbers — a `--vote` filter alone
   keeps `Gültige`/`Ungültige`/`Übrige`.
+- **`--party` is a substring, also for the totals:** `--party Gültige` returns
+  `Ungültige` too, and it comes **first** — never take `.[0]` as the valid-vote count.
+  Select the exact name instead: `jq '.[] | select(.gruppenname == "Gültige")'`. The
+  same holds for parties whose name is part of another's.
 - **`anzahl` and `prozent` can be `null`** — an area lists parties that had no
   candidate (Erststimme) or no list (Zweitstimme) there, with `anzahl: null`; every
   Wahlkreis has such rows. `sort_by(-.anzahl)` then fails (`null (null) cannot be
