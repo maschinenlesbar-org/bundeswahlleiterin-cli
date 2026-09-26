@@ -16,7 +16,7 @@ bundeswahl [global options] <command> [command options]
 | `--base-url <url>` | data host base URL (only `http:`/`https:` accepted; no query or fragment) |
 | `--timeout <ms>` | time limit per request in ms, whole response included (0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value |
-| `--max-retries <n>` | retries for transient 429/503 responses (0..10) |
+| `--max-retries <n>` | retries for transient 429/503 responses (0..10; each waits the server's `Retry-After`, up to 30 s) |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `-o, --output <file>` | write output to a file instead of stdout |
