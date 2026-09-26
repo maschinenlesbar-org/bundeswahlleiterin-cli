@@ -95,3 +95,13 @@ test("enforces maxResponseBytes", async () => {
     },
   );
 });
+
+test("a header value Node cannot send rejects with a typed BundeswahlNetworkError", async () => {
+  for (const ua of ["a\r\nX-Evil: 1", "€-agent"]) {
+    await assert.rejects(
+      nodeHttpTransport({ method: "GET", url: "http://127.0.0.1:9/x", headers: { "User-Agent": ua } }),
+      (err: unknown) => err instanceof BundeswahlNetworkError && /^Invalid request: /.test(err.message),
+      JSON.stringify(ua),
+    );
+  }
+});

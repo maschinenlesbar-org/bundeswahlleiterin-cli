@@ -346,3 +346,18 @@ test("-o with a blank path is a usage error; -o - writes to stdout, not a file n
   assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
   assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
 });
+
+test("a --user-agent with control or non-Latin-1 characters is a usage error, no request", async () => {
+  for (const [ua, message] of [
+    ["€-agent", /outside Latin-1/],
+    ["a\r\nX-Evil: 1", /control characters/],
+  ] as const) {
+    const cli = makeCli();
+    assert.equal(await run(["--user-agent", ua, "parties"], cli.deps), 2, ua);
+    assert.equal(cli.mt.calls.length, 0, ua);
+    assert.match(cli.err.join("\n"), message, ua);
+  }
+  const ok = makeCli();
+  assert.equal(await run(["--user-agent", "bot\tmüller/1.0", "parties"], ok.deps), 0);
+  assert.equal(ok.mt.last().headers?.["User-Agent"], "bot\tmüller/1.0");
+});

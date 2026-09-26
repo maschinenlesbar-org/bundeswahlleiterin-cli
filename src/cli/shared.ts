@@ -128,10 +128,12 @@ export function parseBaseUrl(value: string): string {
 
 /**
  * commander value-parser for a value that ends up in an HTTP header (User-Agent).
- * Rejects a blank value (it used to fall back to the default silently) and control
- * characters — a CR/LF (or other C0/DEL byte) would otherwise reach Node's HTTP
- * layer and throw an opaque `ERR_INVALID_CHAR`. Tab (0x09) is allowed; checked by
- * char code so the source stays free of control bytes.
+ * Node's HTTP layer throws an opaque "Invalid character in header content" at
+ * request time for a CR/LF (or any other C0 control or DEL) and for any character
+ * above U+00FF, which surfaced as "Unexpected error" (exit 1). Reject those here as
+ * a usage error, along with a blank value (it used to fall back to the default
+ * silently). Tab (0x09) and Latin-1 are allowed; checked by char code so the source
+ * stays free of control bytes.
  */
 export function parseHeaderValue(value: string): string {
   parseNonEmpty(value);
@@ -139,6 +141,9 @@ export function parseHeaderValue(value: string): string {
     const c = value.charCodeAt(i);
     if ((c < 0x20 && c !== 0x09) || c === 0x7f) {
       throw new InvalidArgumentError("Value contains control characters.");
+    }
+    if (c > 0xff) {
+      throw new InvalidArgumentError("Value contains characters outside Latin-1 (above U+00FF).");
     }
   }
   return value;
