@@ -7,6 +7,7 @@
 // need today, but keeps the parser correct if a field ever contains a `;`.
 
 import { BundeswahlParseError } from "./errors.js";
+import { sanitizeServerText } from "./engine.js";
 
 /** Strip a leading UTF-8 byte-order mark, if present. */
 function stripBom(text: string): string {
@@ -129,7 +130,9 @@ export function assertUniqueHeader(header: readonly string[]): void {
     if (name === "") continue; // padding cells are expected and carry no data
     if (seen.has(name)) {
       throw new BundeswahlParseError(
-        `Malformed CSV: duplicate column name "${name}" in the header — ` +
+        // The name comes from the (possibly hostile) response: sanitise it, it is
+        // printed to stderr.
+        `Malformed CSV: duplicate column name "${sanitizeServerText(name)}" in the header — ` +
           "values would silently overwrite each other, so the file is not usable as a key→value map.",
       );
     }

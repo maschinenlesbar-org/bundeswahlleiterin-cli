@@ -108,3 +108,16 @@ test("rowsToObjects tolerates repeated empty padding cells in the header", () =>
   assert.equal(row!["a"], "1");
   assert.equal(row!["b"], "2");
 });
+
+test("the duplicate-column error strips terminal escapes and bidi controls from the name", () => {
+  const esc = String.fromCharCode(0x1b);
+  const name = `${esc}[2J${esc}[31mX${String.fromCharCode(0x202e)}\t Y`;
+  const parsed = parseCsv(`a;${name};${name}\n1;2;3\n`, { headerFirstCell: "a" });
+  assert.throws(
+    () => rowsToObjects(parsed),
+    (err: unknown) =>
+      err instanceof BundeswahlParseError &&
+      err.message.includes('duplicate column name "[2J[31mX Y"') &&
+      !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f‮\n]/.test(err.message),
+  );
+});

@@ -47,27 +47,47 @@ export interface EngineOptions {
 const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
 
 /**
- * Strip control characters out of a string that originates in an
- * attacker-controlled response — here, the non-2xx error `detail` snippet, which
- * ends up in a `BundeswahlApiError.message` that run.ts prints raw to stderr.
- * Without this, a hostile or MITM'd endpoint could return a 4xx/5xx body carrying
- * ANSI/OSC escape sequences (retitle the window, clear the screen, spoof output)
- * that reach the user's terminal. The CLI's JSON output is escaped separately
- * (escapeControlChars in cli/shared.ts): JSON.stringify alone leaves DEL and the
- * C1 range raw.
- *
- * Removes all C0 controls except tab (0x09) and newline (0x0a), the C1 range, and
- * DEL (0x7f). Written with codePointAt rather than a control-char regex literal so
- * the source file stays free of raw control bytes.
+ * True for the Unicode bidirectional formatting characters: ALM (U+061C), LRM/RLM
+ * (U+200E/U+200F), the embeddings and overrides U+202A–U+202E and the isolates
+ * U+2066–U+2069. A terminal applies them to the text that follows, so an override
+ * in server text can reorder what the user sees ("Trojan Source" spoofing).
  */
-function sanitizeServerText(text: string): string {
+export function isBidiControl(code: number): boolean {
+  return (
+    code === 0x061c ||
+    code === 0x200e ||
+    code === 0x200f ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
+}
+
+/**
+ * Make a string that originates in an attacker-controlled response safe to put in
+ * an error message, which run.ts prints raw to stderr — the non-2xx error `detail`
+ * snippet, and CSV header names quoted in a parse error:
+ *
+ * - C0 and C1 controls and DEL are dropped, so a hostile or MITM'd endpoint cannot
+ *   drive ANSI/OSC escape sequences (retitle the window, clear the screen, spoof
+ *   output) into the user's terminal.
+ * - Bidi formatting characters (isBidiControl) are dropped, so server text cannot
+ *   reorder the visible message.
+ * - Every run of whitespace — newlines, tabs, U+2028/U+2029 included — becomes one
+ *   space and the ends are trimmed, so the text stays on one line.
+ *
+ * The CLI's JSON output is escaped separately (escapeControlChars in
+ * cli/shared.ts): JSON.stringify alone leaves DEL and the C1 range raw. Written as
+ * a code-point filter so the source file stays free of raw control bytes.
+ */
+export function sanitizeServerText(text: string): string {
   let out = "";
   for (const ch of text) {
     const n = ch.codePointAt(0) ?? 0;
-    if (n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f)) continue;
+    const whitespaceControl = n >= 0x09 && n <= 0x0d;
+    if (!whitespaceControl && (n <= 0x1f || (n >= 0x7f && n <= 0x9f) || isBidiControl(n))) continue;
     out += ch;
   }
-  return out;
+  return out.replace(/\s+/g, " ").trim();
 }
 
 /**
