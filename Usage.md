@@ -164,5 +164,6 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
   ballot; guard for it when filtering by vote in `jq`. The other System-Gruppe rows
   (`Gültige`, `Ungültige`, `Übrige`) come per ballot.
 - **Numbers are numbers, gaps are `null`.** In `results`, `anzahl`/`prozent` parse from
-  the German format; empty or `–` cells become `null`, distinct from `0`. `structure`
-  values stay strings.
+  the German format; empty or `–` cells become `null`, distinct from `0`. A cell that is
+  neither (a malformed number) is an error (exit 1), never a `null`. `structure` values
+  stay strings.

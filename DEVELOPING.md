@@ -109,7 +109,9 @@ The dataset paths are exported as `BTW2025` for reference.
   `"Wahlart"`), then returns `{ header, rows }` with fully-empty rows dropped.
 - **`rowsToObjects(parsed)`** — keys cells by header name (used for the
   dynamic-columned Strukturdaten).
-- **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`.
+- **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`;
+  anything else (`0x10`, `1e3`, `1,2,3`) throws a `BundeswahlParseError` rather than
+  guessing or reading as `null`.
 
 The client maps each dataset by header name (not fixed position), so the parsing
 survives a column being added or reordered. A header that repeats a column name is

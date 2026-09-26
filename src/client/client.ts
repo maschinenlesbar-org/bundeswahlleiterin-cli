@@ -8,7 +8,7 @@
 //   await c.parties();
 //   await c.wahlkreise({ land: "Bayern" });
 
-import { RequestEngine, type EngineOptions } from "./engine.js";
+import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
 import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
 import { BundeswahlParseError } from "./errors.js";
 import type {
@@ -141,8 +141,28 @@ export class BundeswahlClient {
     const text = await this.engine.getText(BTW2025.results);
     const parsed = parseDataset(text, "Wahlart", BTW2025.results, RESULT_COLUMNS);
     const at = indexMap(parsed.header);
-    let rows = parsed.rows.map<ResultRow>((r) => {
+    // A malformed number or ballot is a parse error naming the cell, never a
+    // `null` (which means "no candidate/list here") or a row that drops out of a
+    // --vote filter.
+    const num = (r: string[], row: number, column: string): number | null => {
+      const raw = cell(r, at(column));
+      try {
+        return parseGermanNumber(raw);
+      } catch {
+        throw new BundeswahlParseError(
+          `Malformed CSV: column "${column}" in data row ${row} of ${BTW2025.results} is not a number: ` +
+            `"${sanitizeServerText(raw)}".`,
+        );
+      }
+    };
+    let rows = parsed.rows.map<ResultRow>((r, i) => {
       const stimmeRaw = cell(r, at("Stimme"));
+      if (stimmeRaw !== "" && stimmeRaw !== "1" && stimmeRaw !== "2") {
+        throw new BundeswahlParseError(
+          `Malformed CSV: column "Stimme" in data row ${i + 1} of ${BTW2025.results} must be 1, 2 or empty, ` +
+            `got "${sanitizeServerText(stimmeRaw)}".`,
+        );
+      }
       return {
         wahlart: cell(r, at("Wahlart")),
         wahltag: cell(r, at("Wahltag")),
@@ -155,12 +175,12 @@ export class BundeswahlClient {
         gruppenname: cell(r, at("Gruppenname")),
         gruppenreihenfolge: cell(r, at("Gruppenreihenfolge")),
         stimme: stimmeRaw === "1" ? 1 : stimmeRaw === "2" ? 2 : null,
-        anzahl: parseGermanNumber(cell(r, at("Anzahl"))),
-        prozent: parseGermanNumber(cell(r, at("Prozent"))),
-        vorpAnzahl: parseGermanNumber(cell(r, at("VorpAnzahl"))),
-        vorpProzent: parseGermanNumber(cell(r, at("VorpProzent"))),
-        diffProzent: parseGermanNumber(cell(r, at("DiffProzent"))),
-        diffProzentPkt: parseGermanNumber(cell(r, at("DiffProzentPkt"))),
+        anzahl: num(r, i + 1, "Anzahl"),
+        prozent: num(r, i + 1, "Prozent"),
+        vorpAnzahl: num(r, i + 1, "VorpAnzahl"),
+        vorpProzent: num(r, i + 1, "VorpProzent"),
+        diffProzent: num(r, i + 1, "DiffProzent"),
+        diffProzentPkt: num(r, i + 1, "DiffProzentPkt"),
         bemerkung: cell(r, at("Bemerkung")),
         gewaehlt: cell(r, at("Gewählt")),
       };

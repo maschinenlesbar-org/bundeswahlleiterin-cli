@@ -161,14 +161,27 @@ export function rowsToObjects(parsed: ParsedCsv): Record<string, string>[] {
 }
 
 /**
+ * A German-formatted number: optional minus, digits (optionally grouped by
+ * thousands dots, `1.234.567`), optional decimal comma (`12,609074`).
+ */
+const GERMAN_NUMBER = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$/;
+
+/**
  * Parse a German-formatted number (comma decimal separator, optional thousands
  * dots) into a JS number. Returns `null` for empty / placeholder (`-`, `–`) cells
  * so callers can distinguish "no value" from `0`.
+ *
+ * Anything else throws a BundeswahlParseError. `Number()` alone accepted JS
+ * literal syntax (`0x10` → 16, `1e3` → 1000), and turning an unparseable cell into
+ * `null` made it read as "no candidate/list here" — a wrong answer with exit 0.
  */
 export function parseGermanNumber(value: string): number | null {
   const s = value.trim();
   if (s === "" || s === "-" || s === "–") return null;
-  const normalized = s.replace(/\./g, "").replace(",", ".");
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
+  if (!GERMAN_NUMBER.test(s)) {
+    throw new BundeswahlParseError(
+      `Malformed CSV: "${sanitizeServerText(s)}" is not a German-formatted number.`,
+    );
+  }
+  return Number(s.replace(/\./g, "").replace(",", "."));
 }

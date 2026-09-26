@@ -176,3 +176,16 @@ test("a renamed or missing column is a parse error, not an all-null field or an 
     );
   }
 });
+
+test("a malformed number or Stimme in kerg2 is a parse error naming the cell, not a guess or null", async () => {
+  const row = (stimme: string, anzahl: string) =>
+    `BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;SPD;1;${stimme};${anzahl};16,4;1;1;1;1;;\n`;
+  for (const [extra, message] of [
+    [row("2", "0x10"), /column "Anzahl" in data row 5 of .*kerg2\.csv is not a number: "0x10"/],
+    [row("2", "1e3"), /column "Anzahl" in data row 5 .* is not a number: "1e3"/],
+    [row("02", "1"), /column "Stimme" in data row 5 .* must be 1, 2 or empty, got "02"/],
+  ] as const) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv + extra)).transport });
+    await assert.rejects(() => c.results(), (err) => err instanceof BundeswahlParseError && message.test(err.message));
+  }
+});

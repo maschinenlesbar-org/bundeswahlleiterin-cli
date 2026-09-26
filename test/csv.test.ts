@@ -89,7 +89,18 @@ test("parseGermanNumber handles decimals, thousands and placeholders", () => {
   assert.equal(parseGermanNumber(""), null);
   assert.equal(parseGermanNumber("-"), null);
   assert.equal(parseGermanNumber("–"), null); // en-dash placeholder
-  assert.equal(parseGermanNumber("nope"), null);
+  assert.equal(parseGermanNumber("-1,08241"), -1.08241);
+  assert.equal(parseGermanNumber(" 12,5 "), 12.5);
+});
+
+test("parseGermanNumber rejects JS literal syntax and malformed cells instead of guessing", () => {
+  for (const bad of ["nope", "0x10", "0b101", "1e3", "Infinity", "1.5", "1,2,3", "+5", "12.34,5", "1 000", "abc"]) {
+    assert.throws(
+      () => parseGermanNumber(bad),
+      (err: unknown) => err instanceof BundeswahlParseError && /is not a German-formatted number/.test(err.message),
+      bad,
+    );
+  }
 });
 
 test("rowsToObjects rejects a duplicate column name instead of overwriting it", () => {
