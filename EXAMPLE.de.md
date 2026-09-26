@@ -28,8 +28,10 @@ bundeswahl --compact structure --wahlkreis Görlitz > sgoe.json
 Niedersachsen und Sachsen-Anhalt (54 Zeilen). Das Kürzel `SN` ergibt nur die 16 sächsischen.
 Die Zeile für Leipzig II trägt in `Fußnoten` den Hinweis: „Die Stadt Leipzig bildet mehrere
 Wahlkreise. In den Spalten 1 und 7 bis 48 sind die Werte für Leipzig insgesamt ausgewiesen".
-Nur Fläche, Bevölkerung und Dichte (Spalten 2–6) gelten also für den Wahlkreis selbst. Die Werte
-sind Zeichenketten mit Dezimalkomma.
+Die Fußnote ist eine Obergrenze: Fläche, Bevölkerung und Dichte (Spalten 2–6) gelten für den
+Wahlkreis selbst, ebenso Geburten- und Wanderungssaldo (Spalten 7 und 8), die sich zwischen
+Leipzig I und II unterscheiden (Wanderungssaldo 29,7 gegenüber 22,1); die übrigen unten gezeigten
+Spalten sind für beide gleich. Die Werte sind Zeichenketten mit Dezimalkomma.
 
 **Sachsen, 16 Wahlkreise (150–165)**: 150 Nordsachsen · 151 Leipzig I · 152 Leipzig II ·
 153 Leipzig-Land · 154 Meißen · 155 Bautzen I · 156 Görlitz · 157 Sächsische
@@ -44,7 +46,7 @@ Schweiz-Osterzgebirge · 158 Dresden I · 159 Dresden II – Bautzen II · 160 M
 | Bevölkerung (in 1000) | 305,9 | 245,9 |
 | Ausländer/-innen (%) | 15,4 | 6,9 |
 | Bevölkerungsdichte (EW je km²) | 2389,5 | 116,4 |
-| Wanderungssaldo 2022 (je 1000 EW) | 22,1 ¹ | 16,9 |
+| Wanderungssaldo 2022 (je 1000 EW) | 22,1 | 16,9 |
 | Alter 75 und mehr (%) | 10,6 ¹ | 15,5 |
 | PKW mit Elektro- oder Hybrid-Antrieb (%) | 7,3 ¹ | 3,7 |
 | Verfügbares Einkommen 2021 (EUR je EW) | 20545 ¹ | 21037 |
