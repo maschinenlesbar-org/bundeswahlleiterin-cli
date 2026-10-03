@@ -133,6 +133,7 @@ src/
     http.ts      # the Transport interface + default node:http/https transport
     engine.ts    # URL building, retry/backoff, getText (strict UTF-8, HTML/empty guards), errors
     errors.ts    # BundeswahlError / …ApiError / …NetworkError / …ValidationError / …ParseError
+    validate.ts  # input rules as pure `…Problem` functions + assertValid (shared with the CLI)
     client.ts    # BundeswahlClient — results/parties/wahlkreise/structure (+ BTW2025 paths)
   cli/
     io.ts        # injectable I/O seam (stdout/stderr/file)
@@ -159,6 +160,17 @@ option outside its range, an unknown `areaType`, a `vote` other than `1`/`2`, or
 blank text filter — the library applies the same rules as the CLI's parsers), all
 extending `BundeswahlError`.
 
+### Input validation
+
+The library owns every input rule. [`validate.ts`](src/client/validate.ts) holds them as
+pure, exported functions: a `Problem` returns the reason a value is invalid, or
+`undefined`. `assertValid(name, value, problem)` throws `BundeswahlValidationError` with
+`Invalid <name>: <reason>` before any request is made (async methods reject rather than
+throw). The CLI's commander parsers call the same `…Problem` functions and turn the
+reason into a usage error, and `run.ts` maps a `BundeswahlValidationError` raised during
+an action to exit 2, printed as `Error: <message>`, so the CLI and the library cannot
+drift apart.
+
 ## Testing
 
 ```bash
@@ -175,6 +187,10 @@ npm test          # builds, then runs `node --test` over dist/test
   mocked transport.
 - **`cli.test.ts`** — command parsing, the `results` filters, `--output`, and exit
   codes — mocked client.
+- **`validate.test.ts`** — `assertValid`, the `run.ts` mapping of
+  `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
+  one input through `run()` and through the library on one recording mock transport so a
+  test can assert both give the same outcome.
 
 ## Continuous integration
 
