@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, parseRetryAfter } from "../src/client/engine.js";
+import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter } from "../src/client/engine.js";
 import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -234,4 +234,49 @@ test("numeric engine options outside their range are rejected at construction", 
   }
   assert.doesNotThrow(() => new RequestEngine({ timeoutMs: 0, maxRetries: 10, retryDelayMs: 0, maxResponseBytes: 0 }));
   assert.equal(MAX_RETRIES, 10);
+});
+
+// ---- header values (parity report 2026-10-03, finding #1) ----
+
+test("a bad userAgent is rejected at construction with the CLI's reason, before any request", () => {
+  for (const [ua, reason] of [
+    ["", "Expected a non-empty value."],
+    ["  ", "Expected a non-empty value."],
+    ["a\r\nX-Evil: 1", "Value contains control characters."],
+    ["a\u0000b", "Value contains control characters."],
+    ["a\u007fb", "Value contains control characters."],
+    ["€", "Value contains characters outside Latin-1 (above U+00FF)."],
+  ] as const) {
+    const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+    assert.throws(
+      () => new RequestEngine({ transport: mt.transport, userAgent: ua }),
+      (err: unknown) => err instanceof BundeswahlValidationError && err.message === `Invalid userAgent: ${reason}`,
+      JSON.stringify(ua),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
+});
+
+test("defaultHeaders are checked like the User-Agent: value rules plus a token name", () => {
+  const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+  assert.throws(
+    () => new RequestEngine({ transport: mt.transport, defaultHeaders: { "X-A": "a\r\nb" } }),
+    (err: unknown) =>
+      err instanceof BundeswahlValidationError &&
+      err.message === 'Invalid defaultHeaders["X-A"]: Value contains control characters.',
+  );
+  assert.throws(
+    () => new RequestEngine({ transport: mt.transport, defaultHeaders: { "Bad Name": "x" } }),
+    (err: unknown) => err instanceof BundeswahlValidationError && /^Invalid defaultHeaders name:/.test(err.message),
+  );
+  assert.equal(mt.calls.length, 0);
+});
+
+test("valid header values pass: tab and Latin-1 are allowed", async () => {
+  const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+  const e = new RequestEngine({ transport: mt.transport, userAgent: "bot\tmüller/1.0", defaultHeaders: { "X-A": "é" } });
+  await e.getText("/x.csv");
+  assert.equal(mt.last().headers?.["User-Agent"], "bot\tmüller/1.0");
+  assert.equal(mt.last().headers?.["X-A"], "é");
+  assert.equal(assertHeaderValue("User-Agent", "ok/1"), "ok/1");
 });

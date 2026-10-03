@@ -12,6 +12,7 @@ import {
   BundeswahlValidationError,
   redactUrl,
 } from "./errors.js";
+import { assertValid, headerNameProblem, headerValueProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
 const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
@@ -33,9 +34,16 @@ export interface EngineOptions {
   baseUrl?: string;
   /** Swappable transport. Defaults to the built-in node http/https transport. */
   transport?: Transport;
-  /** Value of the User-Agent header. */
+  /**
+   * Value of the User-Agent header. Only `undefined` selects the default; a blank
+   * value, a C0 control other than tab (CR/LF included), DEL or a character above
+   * U+00FF throws a BundeswahlValidationError (see {@link assertHeaderValue}).
+   */
   userAgent?: string;
-  /** Extra headers sent on every request. */
+  /**
+   * Extra headers sent on every request. Each name must be an HTTP token and each
+   * value obeys the same rules as `userAgent`.
+   */
   defaultHeaders?: Record<string, string>;
   /**
    * Time limit per request in milliseconds, covering the whole response body, not
@@ -188,6 +196,16 @@ function assertHttpScheme(baseUrl: string): void {
   }
 }
 
+/**
+ * Check a value bound for an HTTP header and return it unchanged. Throws a
+ * BundeswahlValidationError (`Invalid <name>: <reason>`) for a blank value, a C0
+ * control other than tab (CR/LF included), DEL, or a character above U+00FF — the
+ * rules of {@link headerValueProblem}, which the CLI's --user-agent parser shares.
+ */
+export function assertHeaderValue(name: string, value: string): string {
+  return assertValid(name, value, headerValueProblem);
+}
+
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -206,8 +224,14 @@ export class RequestEngine {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     assertHttpScheme(this.baseUrl);
     this.transport = options.transport ?? nodeHttpTransport;
-    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
-    this.defaultHeaders = options.defaultHeaders ?? {};
+    this.userAgent =
+      options.userAgent === undefined ? DEFAULT_USER_AGENT : assertHeaderValue("userAgent", options.userAgent);
+    const defaultHeaders: Record<string, string> = {};
+    for (const [name, value] of Object.entries(options.defaultHeaders ?? {})) {
+      assertValid("defaultHeaders name", name, headerNameProblem);
+      defaultHeaders[name] = assertHeaderValue(`defaultHeaders[${JSON.stringify(name)}]`, value);
+    }
+    this.defaultHeaders = defaultHeaders;
     this.timeoutMs = intOption("timeoutMs", options.timeoutMs, 30_000, MAX_TIMEOUT_MS);
     this.maxRetries = intOption("maxRetries", options.maxRetries, 2, MAX_RETRIES);
     this.retryDelayMs = intOption("retryDelayMs", options.retryDelayMs, 200, MAX_RETRY_AFTER_MS);

@@ -79,6 +79,11 @@ new BundeswahlClient({
 });
 ```
 
+`userAgent` and every `defaultHeaders` value are checked in the constructor with
+`assertHeaderValue` (exported; the rules are `headerValueProblem` in `validate.ts`, the
+same function the CLI's `--user-agent` parser calls). Only an omitted `userAgent` selects
+the default; `""` is an error, as `--user-agent ""` is in the CLI.
+
 `429`/`503` are retried up to `maxRetries` (`0`–`10` in the CLI). Each retry waits the
 response's `Retry-After` — delay-seconds or an IMF-fixdate HTTP-date, parsed by
 `parseRetryAfter` — or, without a usable one, `retryDelayMs * attempt`. A `Retry-After`
@@ -156,7 +161,9 @@ calling `process.exit`).
 (transport failure/timeout), `BundeswahlParseError` (the body was not CSV — usually
 an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
 before any request: a base URL that is not http(s) or has a query/fragment, a numeric
-option outside its range, an unknown `areaType`, a `vote` other than `1`/`2`, or a
+option outside its range, a `userAgent` or `defaultHeaders` value that is blank or holds
+a control character (CR/LF included), DEL or a character above U+00FF (and a
+`defaultHeaders` name that is not an HTTP token), an unknown `areaType`, a `vote` other than `1`/`2`, or a
 blank text filter — the library applies the same rules as the CLI's parsers), all
 extending `BundeswahlError`.
 

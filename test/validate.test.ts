@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertValid, type Problem } from "../src/client/validate.js";
+import { assertValid, headerNameProblem, headerValueProblem, type Problem } from "../src/client/validate.js";
 import { BundeswahlError, BundeswahlValidationError } from "../src/client/errors.js";
 import * as lib from "../src/index.js";
 import { run } from "../src/cli/run.js";
@@ -71,4 +71,20 @@ test("parity(): an input both sides accept sends the identical request", async (
   assert.ok(l.ok);
   assert.deepEqual(requestShapes(cli.requests), requestShapes(l.requests));
   assert.equal(cli.out, JSON.stringify(l.ok ? l.value : null));
+});
+
+test("headerValueProblem: blank, C0 controls other than tab, DEL, above U+00FF", () => {
+  assert.equal(headerValueProblem(""), "Expected a non-empty value.");
+  assert.equal(headerValueProblem(" \t "), "Expected a non-empty value.");
+  assert.equal(headerValueProblem("a\nb"), "Value contains control characters.");
+  assert.equal(headerValueProblem("a\u001fb"), "Value contains control characters.");
+  assert.equal(headerValueProblem("a\u007fb"), "Value contains control characters.");
+  assert.equal(headerValueProblem("aĀ"), "Value contains characters outside Latin-1 (above U+00FF).");
+  assert.equal(headerValueProblem(42), "Expected a string.");
+  for (const ok of ["ua/1", " ua ", "a\tb", "café", "ÿ"]) assert.equal(headerValueProblem(ok), undefined, ok);
+});
+
+test("headerNameProblem: an RFC 9110 token", () => {
+  for (const ok of ["X-A", "User-Agent", "x_y.z~1!"]) assert.equal(headerNameProblem(ok), undefined, ok);
+  for (const bad of ["", "Bad Name", "a:b", "ä", "a\nb"]) assert.match(headerNameProblem(bad) ?? "", /token/, bad);
 });
