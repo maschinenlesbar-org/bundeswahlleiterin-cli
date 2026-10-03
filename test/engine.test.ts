@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter } from "../src/client/engine.js";
+import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, validateBaseUrl } from "../src/client/engine.js";
 import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -105,7 +105,9 @@ test("a non-http(s) base URL is rejected at construction, before any request", (
     const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
     assert.throws(
       () => new RequestEngine({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof BundeswahlValidationError && /Unsupported protocol/.test(err.message),
+      (err) =>
+        err instanceof BundeswahlValidationError &&
+        err.message === "Invalid baseUrl: Only http: and https: base URLs are supported.",
     );
     assert.equal(mt.calls.length, 0);
   }
@@ -117,7 +119,8 @@ test("a base URL with a query or fragment is rejected at construction", () => {
     assert.throws(
       () => new RequestEngine({ transport: mt.transport, baseUrl }),
       (err: unknown) =>
-        err instanceof BundeswahlValidationError && /Base URL must not contain a query or fragment/.test(err.message),
+        err instanceof BundeswahlValidationError &&
+        err.message === "Invalid baseUrl: A base URL cannot have a query (?) or fragment (#).",
       baseUrl,
     );
   }
@@ -129,7 +132,10 @@ test("redactUrl hides userinfo; base-URL errors never show the password", () => 
   assert.equal(redactUrl("not a url"), "not a url");
   assert.throws(
     () => new RequestEngine({ baseUrl: "ftp://u:pw@h.test" }),
-    (err: unknown) => err instanceof BundeswahlValidationError && !/pw/.test(err.message) && /\*\*\*@h\.test/.test(err.message),
+    (err: unknown) =>
+      err instanceof BundeswahlValidationError &&
+      !/pw/.test(err.message) &&
+      err.message === "Invalid baseUrl: Only http: and https: base URLs are supported.",
   );
   const api = new BundeswahlApiError({ status: 500, url: "https://u:pw@h.test/x", method: "GET", body: "" });
   assert.equal(api.url, "https://***@h.test/x");
@@ -279,4 +285,26 @@ test("valid header values pass: tab and Latin-1 are allowed", async () => {
   assert.equal(mt.last().headers?.["User-Agent"], "bot\tmüller/1.0");
   assert.equal(mt.last().headers?.["X-A"], "é");
   assert.equal(assertHeaderValue("User-Agent", "ok/1"), "ok/1");
+});
+
+// ---- base URL (parity report 2026-10-03, finding #2) ----
+
+test("a base URL with surrounding whitespace is rejected at construction, before the slash strip", () => {
+  for (const baseUrl of ["https://example.test ", " https://example.test", "https://example.test/ ", "https://x.test\n"]) {
+    const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+    assert.throws(
+      () => new RequestEngine({ baseUrl, transport: mt.transport }),
+      (err: unknown) =>
+        err instanceof BundeswahlValidationError &&
+        err.message === "Invalid baseUrl: A base URL cannot have surrounding whitespace.",
+      JSON.stringify(baseUrl),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
+});
+
+test("validateBaseUrl returns the base URL without trailing slashes, or throws", () => {
+  assert.equal(validateBaseUrl("https://h.test/m//"), "https://h.test/m");
+  assert.equal(validateBaseUrl("https://h.test"), "https://h.test");
+  assert.throws(() => validateBaseUrl(""), /^BundeswahlValidationError: Invalid baseUrl: Expected a non-empty URL\.$/);
 });

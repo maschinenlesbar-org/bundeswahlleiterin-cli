@@ -79,6 +79,14 @@ new BundeswahlClient({
 });
 ```
 
+`baseUrl` is checked in the constructor with `validateBaseUrl` (exported; the rules are
+`baseUrlProblem` in `validate.ts`, the same function the CLI's `--base-url` parser calls)
+on the raw value, before trailing slashes are stripped: a blank value, surrounding
+whitespace (which `new URL()` would trim silently while the engine concatenated the raw
+string into a `/%20/…` path), a scheme other than http(s), or a query or fragment throws
+`BundeswahlValidationError` (`Invalid baseUrl: <reason>`). Only an omitted `baseUrl`
+selects the default host.
+
 `userAgent` and every `defaultHeaders` value are checked in the constructor with
 `assertHeaderValue` (exported; the rules are `headerValueProblem` in `validate.ts`, the
 same function the CLI's `--user-agent` parser calls). Only an omitted `userAgent` selects
@@ -160,7 +168,8 @@ calling `process.exit`).
 `status`/`detail`, with `isRetryable`/`isNotFound`), `BundeswahlNetworkError`
 (transport failure/timeout), `BundeswahlParseError` (the body was not CSV — usually
 an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
-before any request: a base URL that is not http(s) or has a query/fragment, a numeric
+before any request: a base URL that is blank, has surrounding whitespace, is not http(s)
+or has a query/fragment, a numeric
 option outside its range, a `userAgent` or `defaultHeaders` value that is blank or holds
 a control character (CR/LF included), DEL or a character above U+00FF (and a
 `defaultHeaders` name that is not an HTTP token), an unknown `areaType`, a `vote` other than `1`/`2`, or a

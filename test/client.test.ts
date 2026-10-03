@@ -115,7 +115,9 @@ test("a non-http(s) base URL is rejected by the client, never reaching a custom 
     const mt = makeMockTransport(() => csvResponse(fx.structureCsv));
     assert.throws(
       () => new BundeswahlClient({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof BundeswahlValidationError && /Unsupported protocol/.test(err.message),
+      (err) =>
+        err instanceof BundeswahlValidationError &&
+        err.message === "Invalid baseUrl: Only http: and https: base URLs are supported.",
     );
     assert.equal(mt.calls.length, 0);
   }

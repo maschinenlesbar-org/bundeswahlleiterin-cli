@@ -10,9 +10,8 @@ import {
   BundeswahlApiError,
   BundeswahlParseError,
   BundeswahlValidationError,
-  redactUrl,
 } from "./errors.js";
-import { assertValid, headerNameProblem, headerValueProblem } from "./validate.js";
+import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem } from "./validate.js";
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
 const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
@@ -27,10 +26,14 @@ export interface RawResponse {
  * Options for {@link RequestEngine} and the client. The numeric options must be
  * integers within their documented range; anything else (negative, fractional,
  * NaN, Infinity, too large) makes the constructor throw a BundeswahlValidationError,
- * as does a base URL that is not an http(s) URL without query or fragment.
+ * as does a base URL that is blank, padded with whitespace, or not an http(s) URL
+ * without query or fragment, and an unsafe header value.
  */
 export interface EngineOptions {
-  /** Base URL of the data host. Defaults to https://www.bundeswahlleiterin.de */
+  /**
+   * Base URL of the data host. Defaults to https://www.bundeswahlleiterin.de when
+   * omitted; checked by {@link validateBaseUrl}.
+   */
   baseUrl?: string;
   /** Swappable transport. Defaults to the built-in node http/https transport. */
   transport?: Transport;
@@ -170,30 +173,15 @@ export function sanitizeServerText(text: string): string {
 }
 
 /**
- * Reject a base URL whose scheme is not http(s), or that has a query or fragment.
- * The default transport already gates the scheme per hop, but the engine is
- * exported as a library and may be handed a custom transport that does no such
- * check, so gate the configured base URL here too (a `file:`/`ftp:` base URL fails
- * fast with a typed error — a BundeswahlValidationError, since it is a
- * configuration mistake, not a network failure). Data paths are appended to the base URL as a string,
- * so a `?` or `#` in it would swallow every path: `http://h/?x` requests
- * `/?x/dam/...` and `http://h/#f` requests `/`.
+ * Check a base URL and return it without trailing slashes. Throws a
+ * BundeswahlValidationError (`Invalid baseUrl: <reason>`) for a blank value, one with
+ * surrounding whitespace, one that does not parse, a scheme other than http(s), or a
+ * query or fragment — the rules of {@link baseUrlProblem}, which the CLI's --base-url
+ * parser shares. The default transport still gates the scheme per hop; this check
+ * covers a custom transport too.
  */
-function assertHttpScheme(baseUrl: string): void {
-  let url: URL;
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    throw new BundeswahlValidationError(`Invalid base URL: ${redactUrl(baseUrl)}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new BundeswahlValidationError(
-      `Unsupported protocol "${url.protocol}" in base URL: ${redactUrl(baseUrl)}`,
-    );
-  }
-  if (/[?#]/.test(baseUrl)) {
-    throw new BundeswahlValidationError(`Base URL must not contain a query or fragment: ${redactUrl(baseUrl)}`);
-  }
+export function validateBaseUrl(raw: string): string {
+  return assertValid("baseUrl", raw, baseUrlProblem).replace(/\/+$/, "");
 }
 
 /**
@@ -221,8 +209,8 @@ export class RequestEngine {
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: EngineOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-    assertHttpScheme(this.baseUrl);
+    // Validate the raw value, before any slash strip, so "https://h/ " is caught too.
+    this.baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.transport = options.transport ?? nodeHttpTransport;
     this.userAgent =
       options.userAgent === undefined ? DEFAULT_USER_AGENT : assertHeaderValue("userAgent", options.userAgent);

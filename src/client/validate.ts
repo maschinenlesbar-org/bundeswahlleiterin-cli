@@ -46,3 +46,33 @@ export const headerNameProblem: Problem = (value) =>
   typeof value === "string" && /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value)
     ? undefined
     : "Expected a header name made of token characters (letters, digits and !#$%&'*+-.^_`|~).";
+
+/**
+ * A base URL. Data paths are appended to it as a string, so its exact text matters:
+ *
+ * - blank is refused (only an omitted base URL selects the default host);
+ * - surrounding whitespace is refused: `new URL()` trims it silently, but the
+ *   engine uses the raw value, so `"https://h/ "` would request `/%20/dam/...`;
+ * - only `http:`/`https:` are accepted: a `file:`/`ftp:` value fails here, as a
+ *   configuration mistake, rather than deep in a (possibly custom) transport;
+ * - a `?` or `#` would swallow every path (`http://h/?x` requests `/?x/dam/...`,
+ *   `http://h/#f` requests `/`).
+ *
+ * Userinfo (`user:pass@`) is allowed; error messages redact it.
+ */
+export const baseUrlProblem: Problem = (value) => {
+  if (typeof value !== "string") return "Expected a string.";
+  if (value.trim() === "") return "Expected a non-empty URL.";
+  if (value !== value.trim()) return "A base URL cannot have surrounding whitespace.";
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return "Expected a valid URL.";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return "Only http: and https: base URLs are supported.";
+  }
+  if (/[?#]/.test(value)) return "A base URL cannot have a query (?) or fragment (#).";
+  return undefined;
+};

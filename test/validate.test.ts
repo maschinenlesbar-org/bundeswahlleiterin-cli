@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertValid, headerNameProblem, headerValueProblem, type Problem } from "../src/client/validate.js";
+import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, type Problem } from "../src/client/validate.js";
 import { BundeswahlError, BundeswahlValidationError } from "../src/client/errors.js";
 import * as lib from "../src/index.js";
 import { run } from "../src/cli/run.js";
@@ -87,4 +87,20 @@ test("headerValueProblem: blank, C0 controls other than tab, DEL, above U+00FF",
 test("headerNameProblem: an RFC 9110 token", () => {
   for (const ok of ["X-A", "User-Agent", "x_y.z~1!"]) assert.equal(headerNameProblem(ok), undefined, ok);
   for (const bad of ["", "Bad Name", "a:b", "ä", "a\nb"]) assert.match(headerNameProblem(bad) ?? "", /token/, bad);
+});
+
+test("baseUrlProblem: blank, surrounding whitespace, unparsable, non-http(s), query or fragment", () => {
+  assert.equal(baseUrlProblem(""), "Expected a non-empty URL.");
+  assert.equal(baseUrlProblem("   "), "Expected a non-empty URL.");
+  assert.equal(baseUrlProblem("https://h.test "), "A base URL cannot have surrounding whitespace.");
+  assert.equal(baseUrlProblem(" https://h.test"), "A base URL cannot have surrounding whitespace.");
+  assert.equal(baseUrlProblem("https://h.test/\n"), "A base URL cannot have surrounding whitespace.");
+  assert.equal(baseUrlProblem("not a url"), "Expected a valid URL.");
+  assert.equal(baseUrlProblem("ftp://h.test"), "Only http: and https: base URLs are supported.");
+  assert.equal(baseUrlProblem("https://h.test/?x=1"), "A base URL cannot have a query (?) or fragment (#).");
+  assert.equal(baseUrlProblem("https://h.test#f"), "A base URL cannot have a query (?) or fragment (#).");
+  assert.equal(baseUrlProblem(42), "Expected a string.");
+  for (const ok of ["https://h.test", "http://h.test/m/", "https://u:p@h.test/m"]) {
+    assert.equal(baseUrlProblem(ok), undefined, ok);
+  }
 });
