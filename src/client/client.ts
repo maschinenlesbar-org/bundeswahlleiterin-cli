@@ -120,16 +120,15 @@ const STRUCTURE_COLUMNS = ["Land", "Wahlkreis-Nr.", "Wahlkreis-Name"] as const;
  * So: the header row must be found, and every column in `columns` (all the ones
  * the mapper reads) must be in it.
  */
-function parseDataset(
-  text: string,
-  headerFirstCell: string,
-  path: string,
-  columns: readonly string[],
-): ParsedCsv {
-  const parsed = parseCsv(text, { headerFirstCell });
+function parseDataset(text: string, path: string, columns: readonly string[]): ParsedCsv {
+  // The header is found by its column names, wherever they stand: finding it by its first
+  // cell broke on a reorder that moved the first column, which the by-name mapping
+  // below is meant to survive.
+  const parsed = parseCsv(text, { headerColumns: columns });
   if (parsed.header.length === 0) {
+    const shown = columns.slice(0, 5).map((c) => `"${c}"`).join(", ") + (columns.length > 5 ? ", …" : "");
     throw new BundeswahlParseError(
-      `Could not find the expected header ("${headerFirstCell}") in ${path} — ` +
+      `Could not find the expected header (columns ${shown}) in ${path} — ` +
         "the open-data file format may have changed.",
     );
   }
@@ -197,7 +196,7 @@ export class BundeswahlClient {
     const groupType = textFilter("groupType", q["groupType"]);
 
     const text = await this.engine.getText(BTW2025.results);
-    const parsed = parseDataset(text, "Wahlart", BTW2025.results, RESULT_COLUMNS);
+    const parsed = parseDataset(text, BTW2025.results, RESULT_COLUMNS);
     const at = indexMap(parsed.header);
     // A malformed number or ballot is a parse error naming the cell, never a
     // `null` (which means "no candidate/list here") or a row that drops out of a
@@ -274,7 +273,7 @@ export class BundeswahlClient {
   /** The parties / groups reference list (btw25_parteien). */
   async parties(): Promise<Party[]> {
     const text = await this.engine.getText(BTW2025.parties);
-    const parsed = parseDataset(text, "Gruppenschluessel", BTW2025.parties, PARTY_COLUMNS);
+    const parsed = parseDataset(text, BTW2025.parties, PARTY_COLUMNS);
     const at = indexMap(parsed.header);
     return parsed.rows.map<Party>((r) => ({
       gruppenschluessel: cell(r, at("Gruppenschluessel")),
@@ -290,7 +289,7 @@ export class BundeswahlClient {
     assertValid("options", opts, knownKeysProblem(WAHLKREISE_KEYS));
     const land = textFilter("land", opts.land);
     const text = await this.engine.getText(BTW2025.wahlkreise);
-    const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise, WAHLKREIS_COLUMNS);
+    const parsed = parseDataset(text, BTW2025.wahlkreise, WAHLKREIS_COLUMNS);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<Wahlkreis>((r) => ({
       nr: cell(r, at("WKR_NR")),
@@ -344,7 +343,7 @@ export class BundeswahlClient {
       );
     }
     const text = await this.engine.getText(BTW2025.structure);
-    const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);
+    const parsed = parseDataset(text, BTW2025.structure, STRUCTURE_COLUMNS);
     // Cells are trimmed, as every other dataset's mapper does: the upstream file has one
     // Wahlkreis name with a trailing space (16, "…Vorpommern-Greifswald II "), so a join
     // of `wahlkreise` names to these found nothing for it.

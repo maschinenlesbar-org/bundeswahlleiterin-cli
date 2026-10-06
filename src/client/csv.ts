@@ -88,9 +88,26 @@ export interface ParseCsvOptions {
   /**
    * Skip preamble rows until the header is found. If given, the header is the
    * first row whose first cell (trimmed) equals this value; otherwise the header
-   * is the first non-empty row.
+   * is the first non-empty row. Superseded by `headerColumns`, which finds the
+   * header wherever its columns stand.
    */
   headerFirstCell?: string;
+  /**
+   * Find the header by its column names, in any position: the header is the first row
+   * whose cells (trimmed) include at least {@link headerMatchThreshold} of these names.
+   * A row that misses a few (a renamed column) is still found, so the caller can name
+   * the missing ones. Takes precedence over `headerFirstCell`.
+   */
+  headerColumns?: readonly string[];
+}
+
+/**
+ * How many of `n` expected column names a row must contain to count as the header: half
+ * of them, and at least two (one, if only one is expected). Two exact column names in a
+ * preamble or data row are not a coincidence these files produce.
+ */
+export function headerMatchThreshold(n: number): number {
+  return Math.min(n, Math.max(2, Math.ceil(n / 2)));
 }
 
 /**
@@ -100,11 +117,20 @@ export interface ParseCsvOptions {
 export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv {
   const all = parseCsvRows(text, options.delimiter ?? ";");
   const want = options.headerFirstCell;
+  const columns = options.headerColumns;
+  const threshold = columns === undefined ? 0 : headerMatchThreshold(columns.length);
+  const isHeader = (row: string[]): boolean => {
+    if (columns !== undefined) {
+      const cells = new Set(row.map((c) => c.trim()));
+      return columns.filter((c) => cells.has(c)).length >= threshold;
+    }
+    if (want !== undefined) return (row[0] ?? "").trim() === want;
+    return row.some((c) => c.trim() !== "");
+  };
 
   let headerIdx = -1;
   for (let i = 0; i < all.length; i++) {
-    const first = (all[i]![0] ?? "").trim();
-    if (want !== undefined ? first === want : all[i]!.some((c) => c.trim() !== "")) {
+    if (isHeader(all[i]!)) {
       headerIdx = i;
       break;
     }

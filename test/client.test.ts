@@ -269,3 +269,17 @@ test("structure() trims its cells like the other datasets (a trailing space upst
   assert.equal(row!["Wahlkreis-Name"], "München-Nord");
   assert.equal(row!["Land"], "Bayern");
 });
+
+test("a dataset whose first column moved is still found and mapped by header name", async () => {
+  const swapped = fx.wahlkreiseCsv
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("#") || line === "") return line;
+      const cells = line.split(";");
+      return [cells[1], cells[0], ...cells.slice(2)].join(";");
+    })
+    .join("\n");
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(swapped)).transport });
+  const rows = await c.wahlkreise({ land: "BY" });
+  assert.deepEqual(rows, [{ nr: "212", name: "München-Nord", landNr: "09", landName: "Bayern", landAbk: "BY" }]);
+});

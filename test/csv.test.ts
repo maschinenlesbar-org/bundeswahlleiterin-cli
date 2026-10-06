@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/client/csv.js";
+import { headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/client/csv.js";
 import { BundeswahlParseError } from "../src/client/errors.js";
 import * as fx from "./fixtures.js";
 
@@ -131,4 +131,15 @@ test("the duplicate-column error strips terminal escapes and bidi controls from 
       err.message.includes('duplicate column name "[2J[31mX Y"') &&
       !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f‮\n]/.test(err.message),
   );
+});
+
+test("parseCsv with headerColumns finds the header by its names in any position", () => {
+  const text = "# preamble;x;y\nb;a;c\n2;1;3\n";
+  assert.deepEqual(parseCsv(text, { headerColumns: ["a", "b", "c"] }), { header: ["b", "a", "c"], rows: [["2", "1", "3"]] });
+  // A row with half of the names (at least two) counts, so a renamed column can be named.
+  assert.deepEqual(parseCsv("x;a;b;z\n1;2;3;4\n", { headerColumns: ["a", "b", "c", "d"] }).header, ["x", "a", "b", "z"]);
+  assert.deepEqual(parseCsv("x;a;q\n1;2;3\n", { headerColumns: ["a", "b", "c", "d"] }), { header: [], rows: [] });
+  assert.equal(headerMatchThreshold(19), 10);
+  assert.equal(headerMatchThreshold(3), 2);
+  assert.equal(headerMatchThreshold(1), 1);
 });

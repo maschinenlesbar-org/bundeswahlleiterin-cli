@@ -17,7 +17,7 @@ export { MAX_TIMEOUT_MS, nodeHttpTransport } from "./http.js";
 export type { Transport, HttpRequest, HttpResponse } from "./http.js";
 export { buildQueryString } from "./query.js";
 export type { QueryParams, QueryValue } from "./query.js";
-export { parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "./csv.js";
+export { parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber, headerMatchThreshold } from "./csv.js";
 export type { ParsedCsv, ParseCsvOptions } from "./csv.js";
 export {
   BundeswahlError,

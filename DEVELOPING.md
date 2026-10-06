@@ -166,17 +166,21 @@ a `BundeswahlParseError` that says so, rather than a misleading charset diagnosi
   UTF-8 BOM and understands double-quoted fields, `""` escapes, and delimiters/
   newlines inside quotes (more than these files need, but correct if a field ever
   contains a `;`). A trailing newline does not produce a spurious empty row.
-- **`parseCsv(text, { headerFirstCell })`** — skips the human-readable preamble to
-  the header row (the first row whose first cell equals `headerFirstCell`, e.g.
-  `"Wahlart"`), then returns `{ header, rows }` with fully-empty rows dropped.
+- **`parseCsv(text, { headerColumns })`** — skips the human-readable preamble to
+  the header row, the first row that contains at least half (and at least two) of the
+  expected column names in any position (`headerMatchThreshold`), then returns
+  `{ header, rows }` with fully-empty rows dropped. The older `headerFirstCell` option
+  (the first row whose first cell equals a name, e.g. `"Wahlart"`) is still there, but
+  the client no longer uses it: it broke on a reorder that moved the first column.
 - **`rowsToObjects(parsed)`** — keys cells by header name (used for the
   dynamic-columned Strukturdaten).
 - **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`;
   anything else (`0x10`, `1e3`, `1,2,3`) throws a `BundeswahlParseError` rather than
   guessing or reading as `null`.
 
-The client maps each dataset by header name (not fixed position), so the parsing
-survives a column being added or reordered. A header that repeats a column name is
+The client finds each dataset's header and maps its columns by name (not fixed
+position), so the parsing survives a column being added or reordered — the first column
+included. A header that repeats a column name is
 rejected with a `BundeswahlParseError` in every dataset, since a lookup by name would
 silently pick one of the two, and so is a header that lacks a column the mapper reads
 (a renamed `Anzahl` would otherwise make that field `null` in every row, and a renamed
