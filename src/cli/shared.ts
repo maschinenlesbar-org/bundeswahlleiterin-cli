@@ -6,6 +6,7 @@ import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
 import type { BundeswahlClientOptions } from "../client/client.js";
 import { BundeswahlError } from "../client/errors.js";
+import { cleartextProblem, DEFAULT_BASE_URL } from "../client/engine.js";
 import { baseUrlProblem, headerValueProblem } from "../client/validate.js";
 
 /**
@@ -197,6 +198,17 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
   }
 }
 
+/**
+ * Write one `warning: …` line to stderr when the effective base URL is plain `http:` to
+ * a host other than loopback (cleartextProblem): requests, and any credentials in the
+ * URL, travel unencrypted. Called once per run, after the options are parsed and before
+ * the first request; stdout and the exit code are untouched.
+ */
+export function warnOnCleartext(deps: CliDeps, global: GlobalOptions): void {
+  const problem = cleartextProblem(global.baseUrl ?? DEFAULT_BASE_URL);
+  if (problem !== undefined) deps.io.err(`warning: ${problem}`);
+}
+
 export interface ActionContext {
   client: ReturnType<CliDeps["createClient"]>;
   global: GlobalOptions;
@@ -220,6 +232,7 @@ export function action(
     const command = args[args.length - 1] as Command;
     const positionals = args.slice(0, Math.max(0, args.length - 2)) as string[];
     const global = command.optsWithGlobals() as GlobalOptions;
+    warnOnCleartext(deps, global);
     const client = deps.createClient(toEngineOptions(global));
     await fn({ client, global, opts: command.opts() }, positionals);
   };

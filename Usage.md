@@ -23,6 +23,13 @@ bundeswahl [global options] <command> [command options]
 | `-f, --force` | with `--output`, overwrite the file if it already exists (without it, an existing file is never overwritten) |
 | `-V, --version` / `-h, --help` | version / help |
 
+A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
+`::1`) works, but the CLI writes one line to stderr before the first request, e.g.
+`warning: requests to mirror.example are sent unencrypted (http:, not https:)`, or
+`warning: the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)`
+when it carries a `user:password@` (never printed). stdout, `-o` files and the exit code
+are unchanged.
+
 ## `results` — the election result
 
 ```bash
