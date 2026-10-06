@@ -334,10 +334,19 @@ export class BundeswahlClient {
   async structure(opts: { wahlkreis?: string; includeAggregates?: boolean } = {}): Promise<StructureRow[]> {
     assertValid("options", opts, knownKeysProblem(STRUCTURE_KEYS));
     const wahlkreis = textFilter("wahlkreis", opts.wahlkreis);
+    // Checked like every other option: a string "false" (from an env variable or a query
+    // string) is truthy and used to include the 17 aggregate rows, so a caller summing a
+    // column double-counted — the mistake this option exists to prevent.
+    const includeAggregates: unknown = opts.includeAggregates;
+    if (includeAggregates !== undefined && typeof includeAggregates !== "boolean") {
+      throw new BundeswahlValidationError(
+        `Invalid includeAggregates: expected true or false, got ${describeValue(includeAggregates)}.`,
+      );
+    }
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);
     let rows = rowsToObjects(parsed);
-    if (!opts.includeAggregates) {
+    if (includeAggregates !== true) {
       rows = rows.filter((r) => {
         const nr = (r["Wahlkreis-Nr."] ?? "").trim();
         return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= 299;

@@ -48,6 +48,8 @@ const badCalls: Array<[string, () => unknown]> = [
   ["wahlkreise({ land: 9 })", () => new Client().wahlkreise({ land: 9 as never })],
   ["wahlkreise(null)", () => new Client().wahlkreise(null as never)],
   ["structure({ wahlkreis: [] })", () => new Client().structure({ wahlkreis: [] as never })],
+  ["structure({ includeAggregates: 'false' })", () => new Client().structure({ includeAggregates: "false" as never })],
+  ["structure({ includeAggregates: 1 })", () => new Client().structure({ includeAggregates: 1 as never })],
   ["new Client(null)", () => new Client(null as never)],
   ["timeoutMs: 'x'", () => new Client({ timeoutMs: "x" as unknown as number })],
   ["timeoutMs: -1", () => new Client({ timeoutMs: -1 })],
