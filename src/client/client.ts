@@ -221,10 +221,22 @@ export class BundeswahlClient {
             `got "${sanitizeServerText(stimmeRaw)}".`,
         );
       }
+      // The area level is the key of the --area-type filter and typed AreaType: a value
+      // outside the three (an upstream relabel to "WK" or "Bundesland") used to pass as
+      // is, so `--area-type Wahlkreis` matched nothing and answered `[]` with exit 0. A
+      // case variant ("BUND") is read as its level; anything else is a parse error.
+      const gebietsartRaw = cell(r, at("Gebietsart"));
+      const gebietsart = AREA_TYPES.find((a) => a.toLowerCase() === gebietsartRaw.toLowerCase());
+      if (gebietsart === undefined) {
+        throw new BundeswahlParseError(
+          `Malformed CSV: column "Gebietsart" in data row ${i + 1} of ${BTW2025.results} must be ` +
+            `${AREA_TYPES.join(", ")}, got "${sanitizeServerText(gebietsartRaw)}".`,
+        );
+      }
       return {
         wahlart: cell(r, at("Wahlart")),
         wahltag: cell(r, at("Wahltag")),
-        gebietsart: cell(r, at("Gebietsart")) as AreaType,
+        gebietsart,
         gebietsnummer: cell(r, at("Gebietsnummer")),
         gebietsname: cell(r, at("Gebietsname")),
         ueGebietsart: cell(r, at("UegGebietsart")),

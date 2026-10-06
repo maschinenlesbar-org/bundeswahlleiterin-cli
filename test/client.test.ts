@@ -235,3 +235,17 @@ test("an unknown key in a method's options or the client options is a validation
   assert.equal(mt.calls.length, 0);
   assert.throws(() => new BundeswahlClient({ timeout: 5 } as never), /Invalid options: Unknown key "timeout"/);
 });
+
+test("an unexpected Gebietsart is a parse error naming the cell; a case variant is read as its level", async () => {
+  const relabelled = fx.kerg2Csv.replace(/;Wahlkreis;005;Kiel;/g, ";WK;005;Kiel;");
+  const c1 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(relabelled)).transport });
+  await assert.rejects(
+    () => c1.results({ areaType: "Wahlkreis", area: "Kiel" }),
+    (e: unknown) => e instanceof BundeswahlParseError && /column "Gebietsart" in data row 3 .* got "WK"/.test(e.message),
+  );
+  const upper = fx.kerg2Csv.replace(/;Bund;99;/g, ";BUND;99;");
+  const c2 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(upper)).transport });
+  const rows = await c2.results({ areaType: "Bund" });
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => r.gebietsart === "Bund"));
+});
