@@ -3,9 +3,11 @@
 Echte Beispiele für die Claude-Code-Skills des Plugins `bundeswahl`, eines pro Skill: eine
 Anfrage, die `bundeswahl`-Befehle, die der Skill ausgeführt hat, und Claudes Antwort.
 
-Jedes Beispiel lief am 15. September 2026 mit `bundeswahl` 0.0.5 gegen die Live-API.
-Die Daten ändern sich, Ihre Ergebnisse werden also abweichen; mit den gezeigten IDs und
-Schlüsseln können Sie die Anfragen selbst ausprobieren. Lange Listen sind gekürzt.
+Jedes Beispiel lief am 6. Oktober 2026 mit `bundeswahl` 0.3.0 gegen die Open-Data-Dateien,
+wie sie an diesem Tag live heruntergeladen wurden (jede Datei einmal, danach aus einer lokalen
+Kopie bedient). Die Dateien zur Bundestagswahl 2025 sind endgültig, Ihre Ergebnisse sollten also
+übereinstimmen; mit den gezeigten IDs und Schlüsseln können Sie die Anfragen selbst ausprobieren.
+Lange Listen sind gekürzt.
 
 Zum Ausprobieren installieren Sie die CLI und das Plugin – siehe [SKILLS.md](SKILLS.md) (englisch).
 
@@ -22,6 +24,7 @@ bundeswahl --compact wahlkreise --land Sachsen | jq -r 'group_by(.landName)[] | 
 bundeswahl --compact structure --wahlkreis 152 > s152.json
 jq '.[0] | keys_unsorted' s152.json
 bundeswahl --compact structure --wahlkreis Görlitz > sgoe.json
+bundeswahl --compact structure --wahlkreis 151 > s151.json   # Leipzig I, zur Prüfung der Fußnote
 ```
 
 `--land` vergleicht den Ländernamen als Teilstring, deshalb lieferte `--land Sachsen` auch
@@ -62,20 +65,21 @@ Quelle: Die Bundeswahlleiterin, Wiesbaden 2025
 > Wer hat bei der Bundestagswahl 2025 den Wahlkreis Görlitz gewonnen, und wie haben sich die Zweitstimmen dort gegenüber 2021 verändert?
 
 ```bash
-bundeswahl --compact results --area Görlitz --vote 1 --group-type Partei | jq -r 'sort_by(-.anzahl)[0] | "\(.gebietsname): \(.gruppenname)"'   # jq: null (null) cannot be negated
-bundeswahl --compact results --area Görlitz --vote 1 --group-type Partei | jq -r 'map(select(.anzahl != null)) | sort_by(-.anzahl)[:3][] | "\(.gruppenname)\t\(.anzahl)\t\(.prozent)\t\(.gewaehlt)"'
-bundeswahl --compact results --area Görlitz --vote 2 --group-type Partei | jq -r 'map(select(.prozent != null)) | sort_by(-.prozent)[] | "\(.gruppenname)\t\(.prozent)\t\(.vorpProzent)\t\(.diffProzentPkt)"'
-bundeswahl --compact results --area Görlitz --group-type System-Gruppe | jq -r '.[] | select(.gruppenname=="Wählende") | "\(.anzahl)\t\(.prozent)%\t\(.vorpProzent)%"'
-bundeswahl --compact results --area-type Land --area 14 --vote 2 --group-type Partei | jq -r 'map(select(.prozent != null)) | sort_by(-.prozent)[:3][] | "\(.gruppenname)\t\(.prozent)"'
-bundeswahl --compact results --area-type Bund --vote 2 --party AfD | jq -r '.[] | "\(.prozent)\t\(.vorpProzent)"'
+bundeswahl --compact results --area-type Wahlkreis --area Görlitz --vote 1 | jq -r 'map(select(.gruppenart != "System-Gruppe" and .anzahl != null)) | sort_by(-.anzahl)[:3][] | "\(.gebietsnummer) \(.gebietsname)\t\(.gruppenname)\t\(.anzahl)\t\(.prozent)\t\(.gewaehlt)"'
+bundeswahl --compact results --area-type Wahlkreis --area 156 --vote 2 --group-type Partei | jq -r 'map(select(.prozent != null)) | sort_by(-.prozent)[] | "\(.gruppenname)\t\(.prozent)\t\(.vorpProzent)\t\(.diffProzentPkt)"'
+bundeswahl --compact results --area-type Wahlkreis --area 156 --group-type System-Gruppe | jq -r '.[] | select(.gruppenname=="Wählende" or .gruppenname=="Wahlberechtigte") | "\(.gruppenname)\t\(.anzahl)\t\(.prozent)\t\(.vorpProzent)"'
+bundeswahl --compact results --area-type Land --area 14 --vote 2 --group-type Partei | jq -r 'map(select(.prozent != null)) | sort_by(-.prozent)[:3][] | "\(.gebietsname)\t\(.gruppenname)\t\(.prozent)"'
+bundeswahl --compact results --area-type Bund --vote 2 --party AfD | jq -r '.[] | "\(.gruppenname)\t\(.prozent)\t\(.vorpProzent)"'
 bundeswahl --compact results --area-type Bund --group-type System-Gruppe | jq -r '.[] | select(.gruppenname=="Wählende") | "\(.prozent)%"'
 ```
 
-Das Direktmandats-Rezept des Skills scheiterte in `jq`. Parteien ohne Direktkandidatur in
-Görlitz (ÖDP, Volt, dieBasis, …) kommen mit `anzahl: null` zurück, deshalb wurden diese Zeilen
-vor dem Sortieren herausgefiltert. Für den Landesvergleich nutzte der Skill
-`--area-type Land --area 14`. Ein Name allein (`--area Sachsen`) trifft auch Sachsen-Anhalt und
-Niedersachsen, und ein bloßes `--area 14` trifft zusätzlich Wahlkreis 014.
+Wie in seinen Fallstricken beschrieben, kombinierte der Skill jedes `--area` mit `--area-type`:
+Der Name `Görlitz` fand Wahlkreis 156, die weiteren Aufrufe nutzten die Nummer. Das
+Direktmandats-Rezept entfernt vor dem Sortieren die Summenzeilen und die Parteien ohne
+Direktkandidatur in Görlitz (ÖDP, Volt, dieBasis, …, die mit `anzahl: null` zurückkommen). Für den
+Landesvergleich nutzte der Skill `--area-type Land --area 14`: Ein Name allein (`--area Sachsen`)
+trifft auch Sachsen-Anhalt und Niedersachsen, und ein bloßes `--area 14` trifft zusätzlich
+Wahlkreis 014.
 
 **Wahlkreis 156 Görlitz (Sachsen), Bundestagswahl 23.02.2025**
 
