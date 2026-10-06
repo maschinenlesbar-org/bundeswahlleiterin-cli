@@ -31,7 +31,7 @@ data — as clean JSON you can pipe straight into [`jq`](https://jqlang.github.i
 npm i -g @maschinenlesbar.org/bundeswahlleiterin-cli
 ```
 
-This installs the **`bundeswahl`** command. Requires **Node.js 20+**. No API key.
+This installs the **`bundeswahl`** command. Requires **Node.js 22.12+**. No API key.
 
 Check it works:
 

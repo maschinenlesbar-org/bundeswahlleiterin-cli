@@ -4,6 +4,7 @@
 // distribution: unauthenticated GETs against www.bundeswahlleiterin.de returning
 // CSV files (Datenlizenz Deutschland – Namensnennung 2.0).
 
+import { TextDecoder } from "node:util";
 import {
   MAX_TIMEOUT_MS,
   nodeHttpTransport,
