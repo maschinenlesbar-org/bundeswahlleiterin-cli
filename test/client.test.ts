@@ -249,3 +249,15 @@ test("an unexpected Gebietsart is a parse error naming the cell; a case variant 
   assert.equal(rows.length, 2);
   assert.ok(rows.every((r) => r.gebietsart === "Bund"));
 });
+
+test("an echoed value is cut at 500 characters in an error message", async () => {
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
+  await assert.rejects(
+    () => c.results({ areaType: "x".repeat(10_000) as never }),
+    (e: unknown) => e instanceof BundeswahlValidationError && e.message.length < 600 && e.message.includes("…"),
+  );
+  assert.throws(
+    () => new BundeswahlClient({ timeoutMs: "9".repeat(10_000) as never }),
+    (e: unknown) => e instanceof BundeswahlValidationError && e.message.length < 600,
+  );
+});

@@ -66,6 +66,40 @@ export function redactCredentials(text: string, credentials: readonly string[]):
   return out;
 }
 
+/**
+ * Longest echoed value or server text (in characters) an error message shows. A huge
+ * value or a hostile body would otherwise put kilobytes on one stderr line; the error's
+ * own properties (`url`, `body`) keep the full value.
+ */
+export const MAX_MESSAGE_VALUE_LENGTH = 500;
+
+/** `text` cut to MAX_MESSAGE_VALUE_LENGTH characters, ending in "…" when cut. */
+export function cutForMessage(text: string): string {
+  return text.length > MAX_MESSAGE_VALUE_LENGTH ? `${text.slice(0, MAX_MESSAGE_VALUE_LENGTH)}…` : text;
+}
+
+/**
+ * A rejected input value as a message shows it: JSON-quoted (so `"2"` doesn't read like
+ * the number 2), `String()` for what JSON can't show (`undefined`, a symbol, a bigint, a
+ * function), and cut to MAX_MESSAGE_VALUE_LENGTH.
+ */
+export function describeValue(value: unknown): string {
+  let text: string | undefined;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = undefined; // a bigint or a circular object
+  }
+  if (text === undefined) {
+    try {
+      text = typeof value === "function" ? "a function" : String(value);
+    } catch {
+      text = typeof value; // an object whose toString throws
+    }
+  }
+  return cutForMessage(text);
+}
+
 /** Base class for every error originating from this client. */
 export class BundeswahlError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -109,7 +143,7 @@ export class BundeswahlApiError extends BundeswahlError {
       );
     }
     const detailPart = parts.length > 0 ? `: ${parts.join("; ")}` : "";
-    super(`HTTP ${args.status} for ${args.method} ${url}${detailPart}`);
+    super(`HTTP ${args.status} for ${args.method} ${cutForMessage(url)}${detailPart}`);
     this.status = args.status;
     this.url = url;
     this.method = args.method;

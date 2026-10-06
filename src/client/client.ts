@@ -10,7 +10,7 @@
 
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
 import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
-import { BundeswahlParseError, BundeswahlValidationError } from "./errors.js";
+import { BundeswahlParseError, BundeswahlValidationError, cutForMessage, describeValue } from "./errors.js";
 import { assertValid, knownKeysProblem } from "./validate.js";
 import type {
   AreaType,
@@ -74,7 +74,7 @@ function textFilter(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string" || value.trim() === "") {
     throw new BundeswahlValidationError(
-      `Invalid ${name}: expected a non-empty string, got ${JSON.stringify(value) ?? String(value)}.`,
+      `Invalid ${name}: expected a non-empty string, got ${describeValue(value)}.`,
     );
   }
   return value;
@@ -183,13 +183,13 @@ export class BundeswahlClient {
       areaType = AREA_TYPES.find((a) => typeof raw === "string" && a.toLowerCase() === raw.trim().toLowerCase());
       if (areaType === undefined) {
         throw new BundeswahlValidationError(
-          `Invalid areaType: expected one of ${AREA_TYPES.join(", ")}, got ${JSON.stringify(raw) ?? String(raw)}.`,
+          `Invalid areaType: expected one of ${AREA_TYPES.join(", ")}, got ${describeValue(raw)}.`,
         );
       }
     }
     if (q["vote"] !== undefined && q["vote"] !== 1 && q["vote"] !== 2) {
       throw new BundeswahlValidationError(
-        `Invalid vote: expected 1 (Erststimme) or 2 (Zweitstimme), got ${JSON.stringify(q["vote"]) ?? String(q["vote"])}.`,
+        `Invalid vote: expected 1 (Erststimme) or 2 (Zweitstimme), got ${describeValue(q["vote"])}.`,
       );
     }
     const area = textFilter("area", q["area"]);
@@ -209,7 +209,7 @@ export class BundeswahlClient {
       } catch {
         throw new BundeswahlParseError(
           `Malformed CSV: column "${column}" in data row ${row} of ${BTW2025.results} is not a number: ` +
-            `"${sanitizeServerText(raw)}".`,
+            `"${cutForMessage(sanitizeServerText(raw))}".`,
         );
       }
     };
@@ -218,7 +218,7 @@ export class BundeswahlClient {
       if (stimmeRaw !== "" && stimmeRaw !== "1" && stimmeRaw !== "2") {
         throw new BundeswahlParseError(
           `Malformed CSV: column "Stimme" in data row ${i + 1} of ${BTW2025.results} must be 1, 2 or empty, ` +
-            `got "${sanitizeServerText(stimmeRaw)}".`,
+            `got "${cutForMessage(sanitizeServerText(stimmeRaw))}".`,
         );
       }
       // The area level is the key of the --area-type filter and typed AreaType: a value
@@ -230,7 +230,7 @@ export class BundeswahlClient {
       if (gebietsart === undefined) {
         throw new BundeswahlParseError(
           `Malformed CSV: column "Gebietsart" in data row ${i + 1} of ${BTW2025.results} must be ` +
-            `${AREA_TYPES.join(", ")}, got "${sanitizeServerText(gebietsartRaw)}".`,
+            `${AREA_TYPES.join(", ")}, got "${cutForMessage(sanitizeServerText(gebietsartRaw))}".`,
         );
       }
       return {

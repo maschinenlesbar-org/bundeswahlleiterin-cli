@@ -243,6 +243,13 @@ throw). The CLI's commander parsers call the same `…Problem` functions and tur
 reason into a usage error, and `run.ts` maps a `BundeswahlValidationError` raised during
 an action to exit 2, printed as `Error: <message>`, so the CLI and the library cannot
 drift apart.
+Every rejected input is a `BundeswahlValidationError`, never a raw `TypeError`: a
+non-function `transport` or `sleep`, a `defaultHeaders` that isn't an object and a
+non-object query all fail in the constructor or before any request. An echoed value (JSON-
+quoted, so `"2"` doesn't read like `2`) and server text in a message are cut at
+`MAX_MESSAGE_VALUE_LENGTH` (500) characters; the error's own properties keep the full
+value. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
+charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
 `test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
 

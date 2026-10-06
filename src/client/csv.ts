@@ -6,7 +6,7 @@
 // escapes, and delimiters/newlines inside quotes. That is more than these files
 // need today, but keeps the parser correct if a field ever contains a `;`.
 
-import { BundeswahlParseError } from "./errors.js";
+import { BundeswahlParseError, cutForMessage } from "./errors.js";
 import { sanitizeServerText } from "./engine.js";
 
 /** Strip a leading UTF-8 byte-order mark, if present. */
@@ -132,7 +132,7 @@ export function assertUniqueHeader(header: readonly string[]): void {
       throw new BundeswahlParseError(
         // The name comes from the (possibly hostile) response: sanitise it, it is
         // printed to stderr.
-        `Malformed CSV: duplicate column name "${sanitizeServerText(name)}" in the header — ` +
+        `Malformed CSV: duplicate column name "${cutForMessage(sanitizeServerText(name))}" in the header — ` +
           "values would silently overwrite each other, so the file is not usable as a key→value map.",
       );
     }
@@ -180,7 +180,7 @@ export function parseGermanNumber(value: string): number | null {
   if (s === "" || s === "-" || s === "–") return null;
   if (!GERMAN_NUMBER.test(s)) {
     throw new BundeswahlParseError(
-      `Malformed CSV: "${sanitizeServerText(s)}" is not a German-formatted number.`,
+      `Malformed CSV: "${cutForMessage(sanitizeServerText(s))}" is not a German-formatted number.`,
     );
   }
   return Number(s.replace(/\./g, "").replace(",", "."));
