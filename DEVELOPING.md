@@ -315,7 +315,9 @@ npm test          # builds, then runs `node --test` over dist/test
   variable here), P5 the transport contract, P6 the retry policy, P7 pipes and exit codes
   (runs the built bin), P8/P9/P13 charset, malformed bodies and wrong-typed input, P10 strict
   filters, P12 `-o -`, P20 the stderr warning for a plain-`http:` base URL (the env-variable
-  and other-secret cases are skipped: no environment variable, no key). The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  and other-secret cases are skipped: no environment variable, no key), P21 the README's
+  relative links (README.md ships to npmjs.com, so a link to a document the `files`
+  allowlist leaves out must be an absolute GitHub URL). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
 ## Continuous integration

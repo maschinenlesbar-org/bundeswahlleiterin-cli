@@ -23,7 +23,7 @@ data — as clean JSON you can pipe straight into [`jq`](https://jqlang.github.i
   to write to disk; counts and percentages come back as numbers.
 
 > Want to use this as a TypeScript library, or curious how it parses the CSV files
-> with zero dependencies? See **[DEVELOPING.md](DEVELOPING.md)**.
+> with zero dependencies? See **[DEVELOPING.md](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/DEVELOPING.md)**.
 
 ## Install
 
@@ -66,7 +66,7 @@ bundeswahl structure --wahlkreis Kiel
 | `structure` | Structural data (Strukturdaten) per Wahlkreis (`--wahlkreis <nr\|name>`, `--include-aggregates`) |
 
 New to terms like *Wahlkreis*, *Erststimme/Zweitstimme*, *kerg2*, *Gebietsart* or
-*Gruppenart*? The **[Glossary](GLOSSARY.md)** decodes every one.
+*Gruppenart*? The **[Glossary](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/GLOSSARY.md)** decodes every one.
 
 ### `results` filters
 
@@ -154,10 +154,10 @@ are unchanged.
 
 ## Learn more
 
-- **[SKILLS.md](SKILLS.md)** — Claude Code Agent Skills that drive this CLI.
-- **[Usage.md](Usage.md)** — full use-case-driven cookbook.
-- **[GLOSSARY.md](GLOSSARY.md)** — every domain term explained.
-- **[DEVELOPING.md](DEVELOPING.md)** — TypeScript library usage, the CSV parser, architecture, testing, CI.
+- **[SKILLS.md](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/SKILLS.md)** — Claude Code Agent Skills that drive this CLI.
+- **[Usage.md](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/Usage.md)** — full use-case-driven cookbook.
+- **[GLOSSARY.md](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/GLOSSARY.md)** — every domain term explained.
+- **[DEVELOPING.md](https://github.com/maschinenlesbar-org/bundeswahlleiterin-cli/blob/main/DEVELOPING.md)** — TypeScript library usage, the CSV parser, architecture, testing, CI.
 
 ## Data license
 
