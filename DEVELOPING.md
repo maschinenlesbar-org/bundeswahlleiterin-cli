@@ -72,7 +72,7 @@ try {
 new BundeswahlClient({
   baseUrl: "https://www.bundeswahlleiterin.de",
   timeoutMs: 15_000,
-  maxRetries: 3,               // 429 / 503 are retried (Retry-After, else linear backoff)
+  maxRetries: 3,               // 429 / 503 and resets are retried (Retry-After, else linear backoff)
   maxResponseBytes: 50 << 20,
   userAgent: "my-app/1.0",
   transport: customTransport,
@@ -119,7 +119,20 @@ the default; `""` is an error, as `--user-agent ""` is in the CLI.
 response's `Retry-After` — delay-seconds or an IMF-fixdate HTTP-date, parsed by
 `parseRetryAfter` — or, without a usable one, `retryDelayMs * attempt`. A `Retry-After`
 longer than `MAX_RETRY_AFTER_MS` (30 s) is not retried: the `BundeswahlApiError` surfaces
-at once.
+at once. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
+`UND_ERR_SOCKET`, anywhere in the `cause` chain) is retried like a 503, after
+`retryDelayMs * attempt`; a refused connection, a DNS failure and a timeout are not.
+
+**Custom transports.** `timeoutMs` and `maxResponseBytes` hold for every transport, not
+only the built-in one: the engine races the call against its own deadline and passes an
+`AbortSignal` in `HttpRequest.signal` (hand it to `fetch(url, { signal })`), and it checks
+the size of the body it gets back. A transport may return its headers as a fetch `Headers`
+object, a `Map` or a record with names in any case (`Retry-After` is read from all of
+them), and its body as a `Buffer`, any ArrayBuffer view (fetch's `Uint8Array`) or an
+`ArrayBuffer`, from any realm. Whatever a transport throws or returns that isn't a
+response (a string body, no status) becomes a `BundeswahlNetworkError`.
+`test/conformance-p5-transport-contract.test.ts` checks this with a never-answering
+transport, `fetch` against a silent server, a 2 MiB body and every body and header shape.
 
 ### Methods (one per dataset)
 
