@@ -196,6 +196,12 @@ src/
     index.ts     # #! bin shim
 ```
 
+**Closed pipes.** The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`:
+an EPIPE on stdout (`| head`, a `jq` that exits early) exits 0 quietly — it used to print
+an unhandled-EPIPE stack trace and exit 1; an EPIPE on stderr is ignored, so a failed run
+keeps its own exit code; any other output error exits 1.
+`test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin for both.
+
 **Two seams make the whole thing testable in-process (no subprocesses):**
 `Transport` (the single HTTP function; tests inject a mock returning canned CSV) and
 `CliDeps` (a client factory + I/O object; `run.ts` returns an exit code instead of

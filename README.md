@@ -104,11 +104,13 @@ Use `--compact` for single-line JSON and `-o <file>` to write to a file — both
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success (also `--help` / `--version`) |
+| `0` | Success (also `--help` / `--version`, and a reader that stops early, as `bundeswahl results \| head` does) |
 | `2` | Bad usage / invalid argument (nothing was sent) |
 | `4` | Not found (`404` — a data file moved) |
 | `6` | Network / transport failure (DNS, connection, timeout, size cap) |
 | `1` | Any other error — including a non-CSV response (an HTML page instead of the file) |
+
+A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps its own.
 
 ## Troubleshooting
 

@@ -153,11 +153,13 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
 
 | Code | Meaning |
 |---|---|
-| `0` | success (help/version included); an empty filter also exits 0 |
+| `0` | success (help/version included); an empty filter also exits 0, and so does a reader that stops early (`\| head`), quietly |
 | `1` | a runtime error — including a non-CSV response (an HTML page instead of the file) |
 | `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, a filter option given twice) |
 | `4` | HTTP 404 (a data file moved) |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
+
+A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps its own.
 
 ## Notes
 
