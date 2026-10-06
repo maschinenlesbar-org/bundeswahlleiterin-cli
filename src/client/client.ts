@@ -111,6 +111,54 @@ const PARTY_COLUMNS = ["Gruppenschluessel", "Gruppenart_XML", "Gruppenart_CSV", 
 const WAHLKREIS_COLUMNS = ["WKR_NR", "WKR_NAME", "LAND_NR", "LAND_NAME", "LAND_ABK"] as const;
 const STRUCTURE_COLUMNS = ["Land", "Wahlkreis-Nr.", "Wahlkreis-Name"] as const;
 
+/** The kerg2 columns parsed as numbers. */
+const RESULT_NUMBER_COLUMNS = ["Anzahl", "Prozent", "VorpAnzahl", "VorpProzent", "DiffProzent", "DiffProzentPkt"] as const;
+
+/** One dot and three digits: `16.413` — 16413 with a thousands dot, or 16.413 with a decimal point. */
+const AMBIGUOUS_DOT = /^-?\d{1,3}\.\d{3}$/;
+/** Thousands dots that can't be a decimal point: with a decimal comma, or two or more of them. */
+const CLEARLY_GROUPED = /^-?\d{1,3}(?:\.\d{3})+,\d+$|^-?\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?$/;
+/** A number of 1000 or more written without thousands dots. */
+const UNGROUPED_LARGE = /^-?\d{4,}(?:,\d+)?$/;
+
+/**
+ * Refuse a number whose format the file leaves ambiguous. The German format allows
+ * thousands dots (`8.149.124`), so `parseGermanNumber` reads `16.413` as 16413; but in a
+ * file written with decimal points (an English-locale re-export) the same cell means
+ * 16.413 — SPD's 16.413 % came out as 16413 %, exit 0. The convention is read per column:
+ * a column that shows thousands dots elsewhere (a grouped value that can't be a decimal,
+ * and no large value without them) keeps the German reading; in any other column — the
+ * published kerg2 has no dot in any number — a one-dot, three-digit value is a
+ * BundeswahlParseError naming the cell.
+ */
+function assertUnambiguousNumbers(
+  parsed: ParsedCsv,
+  at: (name: string) => number,
+  columns: readonly string[],
+  path: string,
+): void {
+  for (const column of columns) {
+    const index = at(column);
+    let grouped = false;
+    let ungroupedLarge = false;
+    for (const row of parsed.rows) {
+      const value = cell(row, index);
+      if (CLEARLY_GROUPED.test(value)) grouped = true;
+      else if (UNGROUPED_LARGE.test(value)) ungroupedLarge = true;
+    }
+    if (grouped && !ungroupedLarge) continue;
+    parsed.rows.forEach((row, i) => {
+      const value = cell(row, index);
+      if (!AMBIGUOUS_DOT.test(value)) return;
+      throw new BundeswahlParseError(
+        `Malformed CSV: column "${column}" in data row ${i + 1} of ${path} has "${value}", which reads as ` +
+          `${value.replace(".", "")} with a thousands dot or ${value} with a decimal point — the column uses ` +
+          "no thousands dots elsewhere, so the file's number format is ambiguous.",
+      );
+    });
+  }
+}
+
 /**
  * `parseCsv`, but fail loudly if the file is not the expected one. Without this,
  * a `200` response that isn't the expected file (a replaced/moved dataset, or an
@@ -198,6 +246,7 @@ export class BundeswahlClient {
     const text = await this.engine.getText(BTW2025.results);
     const parsed = parseDataset(text, BTW2025.results, RESULT_COLUMNS);
     const at = indexMap(parsed.header);
+    assertUnambiguousNumbers(parsed, at, RESULT_NUMBER_COLUMNS, BTW2025.results);
     // A malformed number or ballot is a parse error naming the cell, never a
     // `null` (which means "no candidate/list here") or a row that drops out of a
     // --vote filter.

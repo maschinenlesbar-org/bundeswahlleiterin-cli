@@ -171,5 +171,7 @@ A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps i
   (`Gültige`, `Ungültige`, `Übrige`) come per ballot.
 - **Numbers are numbers, gaps are `null`.** In `results`, `anzahl`/`prozent` parse from
   the German format; empty or `–` cells become `null`, distinct from `0`. A cell that is
-  neither (a malformed number) is an error (exit 1), never a `null`. `structure` values
+  neither (a malformed number) is an error (exit 1), never a `null`. So is a number the
+  file leaves ambiguous: `16.413` in a column without thousands dots elsewhere could be
+  16413 or 16.413, and is refused rather than guessed. `structure` values
   stay strings, trimmed like every other dataset's cells.

@@ -283,3 +283,22 @@ test("a dataset whose first column moved is still found and mapped by header nam
   const rows = await c.wahlkreise({ land: "BY" });
   assert.deepEqual(rows, [{ nr: "212", name: "München-Nord", landNr: "09", landName: "Bayern", landAbk: "BY" }]);
 });
+
+test("a dot-decimal number is refused as ambiguous unless the column uses thousands dots", async () => {
+  // SPD's Kiel Erststimme percentage written with a decimal point, as an English-locale export would.
+  const dotted = fx.kerg2Csv.replace(";36690;22,076344;", ";36690;22.076;");
+  const c1 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(dotted)).transport });
+  await assert.rejects(
+    () => c1.results(),
+    (e: unknown) => e instanceof BundeswahlParseError && /column "Prozent" in data row 3 .* "22\.076", which reads as 22076 .* or 22\.076/.test(e.message),
+  );
+  // A column that groups its thousands (8.149.124; no large value without dots) keeps the German reading.
+  const grouped = fx.kerg2Csv
+    .replace(";60510631;", ";60.510.631;")
+    .replace(";5762380;", ";5.762.380;")
+    .replace(";36690;", ";36.690;")
+    .replace(";43281;", ";43.281;");
+  const c2 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(grouped)).transport });
+  const rows = await c2.results({ area: "Kiel", party: "SPD" });
+  assert.equal(rows[0]!.anzahl, 36690);
+});

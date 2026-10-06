@@ -176,7 +176,11 @@ a `BundeswahlParseError` that says so, rather than a misleading charset diagnosi
   dynamic-columned Strukturdaten).
 - **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`;
   anything else (`0x10`, `1e3`, `1,2,3`) throws a `BundeswahlParseError` rather than
-  guessing or reading as `null`.
+  guessing or reading as `null`. It reads `16.413` as 16413 (a thousands dot), so
+  `results()` first checks each number column's convention: unless the column shows
+  thousands dots elsewhere (a grouped value that can't be a decimal, and no value of 1000
+  or more without them), a one-dot, three-digit value is ambiguous — 16.413 in an
+  English-locale re-export — and a `BundeswahlParseError` naming the cell.
 
 The client finds each dataset's header and maps its columns by name (not fixed
 position), so the parsing survives a column being added or reordered — the first column
