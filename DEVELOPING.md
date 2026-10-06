@@ -115,11 +115,14 @@ transports and five rejected base URLs.
 same function the CLI's `--user-agent` parser calls). Only an omitted `userAgent` selects
 the default; `""` is an error, as `--user-agent ""` is in the CLI.
 
-`429`/`503` are retried up to `maxRetries` (`0`–`10` in the CLI). Each retry waits the
-response's `Retry-After` — delay-seconds or an IMF-fixdate HTTP-date, parsed by
-`parseRetryAfter` — or, without a usable one, `retryDelayMs * attempt`. A `Retry-After`
-longer than `MAX_RETRY_AFTER_MS` (30 s) is not retried: the `BundeswahlApiError` surfaces
-at once. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
+`429`/`503` are retried up to `maxRetries` (`0`–`10` in the CLI). Each retry waits
+`retryDelayMs * attempt` (200 ms by default), or the response's `Retry-After` —
+delay-seconds or an IMF-fixdate HTTP-date, parsed by `parseRetryAfter` — when that is
+longer. **Retries never burst**: a `Retry-After` can make a wait longer, never shorter, so
+`Retry-After: 0` or a date in the past no longer sends the retries back to back. A
+`Retry-After` longer than `MAX_RETRY_AFTER_MS` (30 s) is not retried: the
+`BundeswahlApiError` surfaces at once, says so, names the requested wait and carries it as
+`retryAfterMs`. `test/conformance-p6-retry-policy.test.ts` checks both. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
 `UND_ERR_SOCKET`, anywhere in the `cause` chain) is retried like a 503, after
 `retryDelayMs * attempt`; a refused connection, a DNS failure and a timeout are not.
 

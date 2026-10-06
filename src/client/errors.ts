@@ -84,17 +84,38 @@ export class BundeswahlApiError extends BundeswahlError {
   readonly url: string;
   readonly method: string;
   readonly body: string;
+  /**
+   * For a 429/503 that was not retried because its `Retry-After` asked for longer than the
+   * client waits (`MAX_RETRY_AFTER_MS`, 30 s): the requested wait in milliseconds.
+   */
+  readonly retryAfterMs: number | undefined;
 
-  constructor(args: { status: number; url: string; method: string; body: string; detail?: string }) {
+  constructor(args: {
+    status: number;
+    url: string;
+    method: string;
+    body: string;
+    detail?: string;
+    retryAfterMs?: number;
+  }) {
     // The URL is shown without userinfo: a credential in --base-url must not leak.
     const url = redactUrl(args.url);
-    const detailPart = args.detail ? `: ${args.detail}` : "";
+    const parts: string[] = [];
+    if (args.detail) parts.push(args.detail);
+    if (args.retryAfterMs !== undefined) {
+      parts.push(
+        `the server asks to retry after ${Math.ceil(args.retryAfterMs / 1000)} s, longer than ` +
+          `the 30 s this client waits, so it was not retried (more retries won't help; try again later)`,
+      );
+    }
+    const detailPart = parts.length > 0 ? `: ${parts.join("; ")}` : "";
     super(`HTTP ${args.status} for ${args.method} ${url}${detailPart}`);
     this.status = args.status;
     this.url = url;
     this.method = args.method;
     this.body = args.body;
     this.detail = args.detail;
+    this.retryAfterMs = args.retryAfterMs;
   }
 
   /** True for HTTP statuses treated as transient and retry-able. */

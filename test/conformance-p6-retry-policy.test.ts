@@ -1,0 +1,62 @@
+// Conformance test P6 (fix plan 2026-10-06): retries never burst. `Retry-After: 0` or a date
+// in the past waits at least the normal backoff; a long Retry-After is capped. Shared across
+// the *-cli repos; only the adapter block differs.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { HttpResponse } from "../src/client/http.js";
+
+// ---- adapter (per repo) -------------------------------------------------------------
+import { BundeswahlClient as Client } from "../src/client/client.js";
+import { BundeswahlApiError as ApiError } from "../src/client/errors.js";
+import { partiesCsv } from "./fixtures.js";
+const call = (client: Client): Promise<unknown> => client.parties();
+const okBody = partiesCsv;
+/** How a body goes on the wire: the datasets are CSV files, so the text as it is. */
+const serialize = (body: unknown): string => String(body);
+/** The shortest wait before retrying a 429 / a 503 without Retry-After (the documented backoff). */
+const MIN_429_MS = 200; // bundeswahl backs off linearly from retryDelayMs for both statuses
+const MIN_503_MS = 200;
+/** The documented ceiling on one Retry-After wait. */
+const RETRY_AFTER_CAP_MS = 30_000;
+/**
+ * What a Retry-After above the cap does: "wait" the cap and retry (autobahn), or "fail" at
+ * once with a message that names the requested wait (the pattern's other option; bundeswahl,
+ * as documented since 0.0.x: retrying early would only land inside the server's window).
+ */
+const ABOVE_CAP = "fail" as "wait" | "fail";
+// --------------------------------------------------------------------------------------
+
+async function sleepsFor(status: number, retryAfter: string | undefined, retries = 3): Promise<number[]> {
+  const sleeps: number[] = [];
+  let n = 0;
+  const transport = async (): Promise<HttpResponse> => {
+    if (n++ < retries) {
+      return { status, headers: retryAfter === undefined ? {} : { "retry-after": retryAfter }, body: Buffer.from("{}") };
+    }
+    return { status: 200, headers: { "content-type": "text/csv; charset=utf-8" }, body: Buffer.from(serialize(okBody)) };
+  };
+  await call(new Client({ transport, maxRetries: retries, sleep: async (ms) => void sleeps.push(ms) }));
+  return sleeps;
+}
+
+test("P6: Retry-After 0 or a past date never makes a zero-delay burst", async () => {
+  for (const value of ["0", "Wed, 21 Oct 2015 07:28:00 GMT"]) {
+    for (const [status, min] of [[429, MIN_429_MS], [503, MIN_503_MS]] as const) {
+      const sleeps = await sleepsFor(status, value);
+      assert.equal(sleeps.length, 3);
+      assert.ok(sleeps.every((ms) => ms >= min), `${status} Retry-After ${value}: ${sleeps.join(", ")}`);
+    }
+  }
+});
+
+test("P6: a Retry-After longer than the backoff is honoured, a huge one capped", async () => {
+  assert.deepEqual(await sleepsFor(503, "5", 1), [5000]);
+  if (ABOVE_CAP === "wait") {
+    assert.deepEqual(await sleepsFor(503, "999999", 1), [RETRY_AFTER_CAP_MS]);
+  } else {
+    // Not retried: one request, no sleep, and the error says why retrying won't help.
+    await assert.rejects(sleepsFor(503, "999999", 1), (e: unknown) =>
+      e instanceof ApiError && /999999 s/.test(e.message) && new RegExp(`${RETRY_AFTER_CAP_MS / 1000} s`).test(e.message) && /won't help/.test(e.message));
+  }
+});

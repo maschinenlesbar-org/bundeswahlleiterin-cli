@@ -135,9 +135,9 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `-o, --output <file>` | Write output to this file instead of stdout (`-` = stdout). Refuses to overwrite an existing file unless `--force` is given |
 | `-f, --force` | With `--output`, overwrite the target file if it already exists |
 | `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`). A `user:password@` in it is sent as Basic auth and shown as `***@` in every message |
-| `--timeout <ms>` | Time limit per request, reading the whole response included (default `30000`; `0` = none; at most `2147483647`) |
+| `--timeout <ms>` | Time limit per request, reading the whole response included (default `30000`; `0` = none; at most `2147483647`). It bounds each attempt; the waits between retries come on top |
 | `--user-agent <ua>` | `User-Agent` header value |
-| `--max-retries <n>` | Retries for transient `429`/`503` responses and reset connections (0..10, default `2`); a refused connection, a DNS failure and a timeout are not retried. Each retry waits the server's `Retry-After` (up to 30 s; a longer one is not retried) or else backs off linearly |
+| `--max-retries <n>` | Retries for transient `429`/`503` responses and reset connections (0..10, default `2`); a refused connection, a DNS failure and a timeout are not retried. Each retry waits 200 ms × attempt, or the server's `Retry-After` (seconds or HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried, and the error names the requested wait |
 | `--max-response-bytes <n>` | Cap response body size in bytes (`0` = unlimited; default 100 MiB) |
 
 ## Learn more
