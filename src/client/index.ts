@@ -25,6 +25,8 @@ export {
   BundeswahlValidationError,
   BundeswahlParseError,
   redactUrl,
+  credentialsIn,
+  redactCredentials,
 } from "./errors.js";
 
 export { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem } from "./validate.js";
