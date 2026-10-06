@@ -134,7 +134,7 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `--compact` | Print JSON on a single line instead of pretty-printed |
 | `-o, --output <file>` | Write output to this file instead of stdout (`-` = stdout). Refuses to overwrite an existing file unless `--force` is given |
 | `-f, --force` | With `--output`, overwrite the target file if it already exists |
-| `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment) |
+| `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`). A `user:password@` in it is sent as Basic auth and shown as `***@` in every message |
 | `--timeout <ms>` | Time limit per request, reading the whole response included (default `30000`; `0` = none; at most `2147483647`) |
 | `--user-agent <ua>` | `User-Agent` header value |
 | `--max-retries <n>` | Retries for transient `429`/`503` responses (0..10, default `2`). Each retry waits the server's `Retry-After` (up to 30 s; a longer one is not retried) or else backs off linearly |

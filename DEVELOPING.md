@@ -83,7 +83,9 @@ new BundeswahlClient({
 `baseUrlProblem` in `validate.ts`, the same function the CLI's `--base-url` parser calls)
 on the raw value, before trailing slashes are stripped: a blank value, surrounding
 whitespace (which `new URL()` would trim silently while the engine concatenated the raw
-string into a `/%20/…` path), a scheme other than http(s), or a query or fragment throws
+string into a `/%20/…` path), a control character, a scheme other than http(s), a query
+or fragment, or a `%` in the userinfo that isn't an escape (Node would fail to decode it
+for the Authorization header at request time; write `%25`) throws
 `BundeswahlValidationError` (`Invalid baseUrl: <reason>`). Only an omitted `baseUrl`
 selects the default host.
 

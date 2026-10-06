@@ -58,12 +58,23 @@ export const headerNameProblem: Problem = (value) =>
  * - a `?` or `#` would swallow every path (`http://h/?x` requests `/?x/dam/...`,
  *   `http://h/#f` requests `/`).
  *
- * Userinfo (`user:pass@`) is allowed; error messages redact it.
+ * - a control character is refused: `new URL()` drops tab/CR/LF silently;
+ * - userinfo (`user:pass@`) is allowed, but it must decode: Node decodes it into the
+ *   Authorization header and fails at request time ("URI malformed", reported as a
+ *   network error) on a `%` that isn't an escape, so that is a usage error here
+ *   (write a literal `%` as `%25`).
+ *
+ * The reasons never echo the URL, so a credential in it cannot leak; error messages
+ * redact the userinfo.
  */
 export const baseUrlProblem: Problem = (value) => {
   if (typeof value !== "string") return "Expected a string.";
   if (value.trim() === "") return "Expected a non-empty URL.";
   if (value !== value.trim()) return "A base URL cannot have surrounding whitespace.";
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return "A base URL cannot contain control characters.";
+  }
   let url: URL;
   try {
     url = new URL(value);
@@ -74,5 +85,12 @@ export const baseUrlProblem: Problem = (value) => {
     return "Only http: and https: base URLs are supported.";
   }
   if (/[?#]/.test(value)) return "A base URL cannot have a query (?) or fragment (#).";
+  for (const part of [url.username, url.password]) {
+    try {
+      decodeURIComponent(part);
+    } catch {
+      return 'The user name or password has a "%" that is not followed by two hex digits; write a literal "%" as %25.';
+    }
+  }
   return undefined;
 };
