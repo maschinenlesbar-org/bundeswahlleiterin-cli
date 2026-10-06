@@ -47,7 +47,7 @@ test("results renders JSON and hits the kerg2 path", async () => {
   const code = await run(["results"], cli.deps);
   assert.equal(code, 0);
   assert.match(cli.mt.last().url, /kerg2\.csv/);
-  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 4);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 7);
 });
 
 test("results --vote erst maps to Erststimme (2 rows)", async () => {
@@ -77,7 +77,7 @@ test("an invalid --vote is rejected (exit 2)", async () => {
 test("parties lists the reference groups", async () => {
   const cli = makeCli();
   await run(["parties"], cli.deps);
-  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 4);
 });
 
 test("wahlkreise --land filters by Land", async () => {
@@ -115,7 +115,9 @@ test("--compact prints single-line JSON", async () => {
 test("DEL and C1 control characters in server data are escaped in the JSON output", async () => {
   const controls = String.fromCharCode(0x7f, 0x85, 0x9b) + "2J";
   const esc = String.fromCharCode(0x1b) + "[31m";
-  const csv = `Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n4;PARTEI;Partei;Rat${controls};${esc}\n`;
+  const csv =
+    `Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n4;PARTEI;Partei;Rat${controls};${esc}\n` +
+    "28;UEBRIGE;System-Gruppe;Übrige;Übrige\n";
   for (const format of [[], ["--compact"]]) {
     const cli = makeCli(() => csvResponse(csv));
     assert.equal(await run([...format, "parties"], cli.deps), 0);
@@ -125,6 +127,7 @@ test("DEL and C1 control characters in server data are escaped in the JSON outpu
     assert.match(text, /Rat\\u007f\\u0085\\u009b2J/);
     assert.deepEqual(JSON.parse(text), [
       { gruppenschluessel: "4", gruppenartXml: "PARTEI", gruppenartCsv: "Partei", kurz: `Rat${controls}`, name: esc },
+      { gruppenschluessel: "28", gruppenartXml: "UEBRIGE", gruppenartCsv: "System-Gruppe", kurz: "Übrige", name: "Übrige" },
     ]);
   }
 });
@@ -263,9 +266,10 @@ test("structure --include-aggregates returns the official summary rows", async (
   assert.equal(await run(["--compact", "structure", "--include-aggregates"], cli.deps), 0);
   const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
   const agg = rows.filter((r) => Number(r["Wahlkreis-Nr."]) > 299);
-  assert.equal(agg.length, 1);
-  assert.equal(agg[0]!["Wahlkreis-Name"], "Land insgesamt");
-  assert.equal(agg[0]!["Wahlkreis-Nr."], "901");
+  assert.deepEqual(
+    agg.map((r) => [r["Wahlkreis-Nr."], r["Wahlkreis-Name"]]),
+    [["901", "Land insgesamt"], ["999", "Insgesamt"]],
+  );
 });
 
 test("--include-aggregates makes an aggregate reachable by its number", async () => {
@@ -343,7 +347,7 @@ test("-o with a blank path is a usage error; -o - writes to stdout, not a file n
   const cli = makeCli();
   assert.equal(await run(["--compact", "-o", "-", "parties"], cli.deps), 0);
   assert.deepEqual(cli.files, {});
-  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 4);
   assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
 });
 

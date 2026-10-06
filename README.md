@@ -122,6 +122,9 @@ A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps i
   is reorganised, a path needs updating.
 - **Exit `1` / "received an HTML page"** — the request returned an HTML page instead
   of a CSV (a moved file, or a custom `--base-url`).
+- **Exit `1` / "is incomplete" or "no data rows"** — the downloaded file is cut short
+  (each dataset is checked against its own structure, e.g. kerg2's totals must add up).
+  Try again later; the CLI never answers with part of a file.
 - **Empty `[]`** — the filter matched nothing; broaden `--area`/`--party`, or check
   the value against `parties` / `wahlkreise`.
 

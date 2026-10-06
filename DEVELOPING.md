@@ -195,6 +195,21 @@ such as `BUND` is read as its level) and a `Stimme` other than `1`, `2` or empty
 errors naming the cell: a relabelled level would otherwise make `--area-type` match nothing
 and answer `[]` with exit 0.
 
+**Completeness.** A body cut inside a row fails the rectangular check; a body cut at a row
+boundary, or a file that is only its header, is caught by each dataset's own structure,
+so it is a `BundeswahlParseError` instead of partial data or `[]` with exit 0:
+
+- `results` (kerg2): every area ends with its two "Übrige" rows, so the file's last row is
+  an "Übrige" Zweitstimme row; every area has exactly one "Wahlberechtigte" row, and they
+  add up — the Bund's is the sum of the 16 Länder's, each Land's the sum of its
+  Wahlkreise' (`UegGebietsnummer`). A cut at an area boundary breaks a sum.
+- `parties`: the list ends with the "Übrige" group (`Gruppenart_XML` `UEBRIGE`).
+- `wahlkreise`: the file has no closing row, so the election's own size is the check:
+  Wahlkreise 1–299 (`BTW2025_WAHLKREISE`), each once.
+- `structure`: the file ends with the national "Insgesamt" row (`Wahlkreis-Nr.` 999).
+
+The test fixtures are complete in this sense (`test/fixtures.ts`).
+
 ## Architecture
 
 ```

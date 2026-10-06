@@ -18,7 +18,8 @@ import type { Party } from "../src/client/types.js";
 /** A call whose answer contains a text field, and how to read that field from the result. */
 const textCall = (client: Client): Promise<unknown> => client.parties();
 const PARTIES_HEADER = "Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname";
-const textBody = (text: string): unknown => `${PARTIES_HEADER}\n2;PARTEI;Partei;X;${text}\n`;
+const textBody = (text: string): unknown =>
+  `${PARTIES_HEADER}\n2;PARTEI;Partei;X;${text}\n28;UEBRIGE;System-Gruppe;Übrige;Übrige\n`;
 const readText = (result: unknown): string => (result as Party[])[0]!.name;
 /** How a body goes on the wire: the datasets are CSV files, so the text as it is. */
 const serialize = (body: unknown): string => String(body);

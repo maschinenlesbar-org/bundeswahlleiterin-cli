@@ -40,6 +40,9 @@ export const BTW2025 = {
   structure: "/dam/jcr/181f9e38-38db-4f64-991c-8141dfa0f2cb/btw2025_strukturdaten.csv",
 } as const;
 
+/** The number of Wahlkreise (constituencies) of the Bundestagswahl 2025, numbered 1–299. */
+export const BTW2025_WAHLKREISE = 299;
+
 /** Options for the client (engine options only — the open data needs no auth). */
 export type BundeswahlClientOptions = EngineOptions;
 
@@ -110,6 +113,74 @@ const RESULT_COLUMNS = [
 const PARTY_COLUMNS = ["Gruppenschluessel", "Gruppenart_XML", "Gruppenart_CSV", "GruppennameKurz", "Gruppenname"] as const;
 const WAHLKREIS_COLUMNS = ["WKR_NR", "WKR_NAME", "LAND_NR", "LAND_NAME", "LAND_ABK"] as const;
 const STRUCTURE_COLUMNS = ["Land", "Wahlkreis-Nr.", "Wahlkreis-Name"] as const;
+
+/**
+ * Fail unless a dataset has data rows. A file that is only its preamble and header — a
+ * placeholder, an upload cut after the header — used to answer `[]` with exit 0, which
+ * the docs define as "the filter matched nothing".
+ */
+function assertHasRows(parsed: ParsedCsv, path: string): void {
+  if (parsed.rows.length === 0) {
+    throw new BundeswahlParseError(
+      `Malformed CSV: ${path} has a header but no data rows — the file is truncated or a placeholder.`,
+    );
+  }
+}
+
+/**
+ * Fail unless kerg2 is complete by its own structure. A body cut inside a row was already
+ * rejected (rectangular rows); a body cut at a row boundary was not: `head -n 5000` gave
+ * 4 990 of 15 617 rows and `--area 299` then answered `[]` with exit 0. The file says
+ * where it ends:
+ *
+ * - every area (the Bund, 16 Länder, 299 Wahlkreise) ends with its two "Übrige" rows, the
+ *   last one for the Zweitstimme — so the file's last row is that one, or it was cut
+ *   inside an area;
+ * - every area has exactly one "Wahlberechtigte" row, and the hierarchy adds up: the
+ *   Bund's count is the sum of the Länder's, each Land's the sum of its Wahlkreise' — so
+ *   a cut at an area boundary, which drops whole Länder or Wahlkreise, is caught too, and
+ *   so is a duplicated area.
+ */
+function assertCompleteResults(rows: readonly ResultRow[], path: string): void {
+  if (rows.length === 0) {
+    throw new BundeswahlParseError(
+      `Malformed CSV: ${path} has a header but no data rows — the file is truncated or a placeholder.`,
+    );
+  }
+  const truncated = (why: string): BundeswahlParseError =>
+    new BundeswahlParseError(`Malformed CSV: ${path} is incomplete — ${why}; the file is truncated or not the published one.`);
+  const last = rows[rows.length - 1]!;
+  if (!(last.gruppenart === "System-Gruppe" && last.gruppenname === "Übrige" && last.stimme === 2)) {
+    throw truncated(
+      `its last row (${cutForMessage(sanitizeServerText(`${last.gebietsname}, ${last.gruppenname}`))}) is not an ` +
+        'area\'s closing "Übrige" row for the Zweitstimme',
+    );
+  }
+  const areaKey = (r: ResultRow): string => `${r.gebietsart} ${r.gebietsnummer.replace(/^0+/, "")}`;
+  const eligible = new Map<string, ResultRow>();
+  for (const r of rows) {
+    if (r.gruppenart !== "System-Gruppe" || r.gruppenname !== "Wahlberechtigte") continue;
+    if (eligible.has(areaKey(r))) throw truncated(`area ${areaKey(r)} has two "Wahlberechtigte" rows`);
+    eligible.set(areaKey(r), r);
+  }
+  for (const r of rows) {
+    if (!eligible.has(areaKey(r))) throw truncated(`area ${areaKey(r)} has no "Wahlberechtigte" row`);
+  }
+  const areas = [...eligible.values()];
+  const bund = areas.filter((a) => a.gebietsart === "Bund");
+  if (bund.length !== 1) throw truncated(`it has ${bund.length} Bund areas, not 1`);
+  const sumOf = (children: readonly ResultRow[]): number => children.reduce((n, c) => n + (c.anzahl ?? 0), 0);
+  const laender = areas.filter((a) => a.gebietsart === "Land");
+  if (sumOf(laender) !== (bund[0]!.anzahl ?? 0)) {
+    throw truncated("the Länder's Wahlberechtigte don't add up to the Bund's");
+  }
+  for (const land of laender) {
+    const kreise = areas.filter((a) => a.gebietsart === "Wahlkreis" && sameNumber(a.ueGebietsnummer, land.gebietsnummer));
+    if (sumOf(kreise) !== (land.anzahl ?? 0)) {
+      throw truncated(`the Wahlkreise of ${cutForMessage(sanitizeServerText(land.gebietsname))} don't add up to the Land's Wahlberechtigte`);
+    }
+  }
+}
 
 /** The kerg2 columns parsed as numbers. */
 const RESULT_NUMBER_COLUMNS = ["Anzahl", "Prozent", "VorpAnzahl", "VorpProzent", "DiffProzent", "DiffProzentPkt"] as const;
@@ -304,6 +375,8 @@ export class BundeswahlClient {
       };
     });
 
+    assertCompleteResults(rows, BTW2025.results);
+
     if (areaType !== undefined) rows = rows.filter((r) => r.gebietsart === areaType);
     if (area !== undefined) {
       // A bare number matches the area number ignoring leading zeros ("5" == "005");
@@ -323,14 +396,24 @@ export class BundeswahlClient {
   async parties(): Promise<Party[]> {
     const text = await this.engine.getText(BTW2025.parties);
     const parsed = parseDataset(text, BTW2025.parties, PARTY_COLUMNS);
+    assertHasRows(parsed, BTW2025.parties);
     const at = indexMap(parsed.header);
-    return parsed.rows.map<Party>((r) => ({
+    const parties = parsed.rows.map<Party>((r) => ({
       gruppenschluessel: cell(r, at("Gruppenschluessel")),
       gruppenartXml: cell(r, at("Gruppenart_XML")),
       gruppenartCsv: cell(r, at("Gruppenart_CSV")),
       kurz: cell(r, at("GruppennameKurz")),
       name: cell(r, at("Gruppenname")),
     }));
+    // The list ends with the "Übrige" group (Gruppenart_XML UEBRIGE), after the parties and
+    // the Einzelbewerber: a file cut at a row boundary ends anywhere else.
+    if (parties[parties.length - 1]!.gruppenartXml !== "UEBRIGE") {
+      throw new BundeswahlParseError(
+        `Malformed CSV: ${BTW2025.parties} is incomplete — its last row is not the closing "Übrige" group; ` +
+          "the file is truncated or not the published one.",
+      );
+    }
+    return parties;
   }
 
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
@@ -347,6 +430,20 @@ export class BundeswahlClient {
       landName: cell(r, at("LAND_NAME")),
       landAbk: cell(r, at("LAND_ABK")),
     }));
+    // The list has no closing row, but the election has: Wahlkreise 1 to 299, each once.
+    // A file cut at a row boundary (or a header-only placeholder) used to answer with the
+    // Wahlkreise it still had, or `[]`, and exit 0.
+    const numbers = new Set(rows.map((w) => (isNumeric(w.nr) ? Number(w.nr) : Number.NaN)));
+    const complete =
+      rows.length === BTW2025_WAHLKREISE &&
+      numbers.size === BTW2025_WAHLKREISE &&
+      [...numbers].every((n) => Number.isInteger(n) && n >= 1 && n <= BTW2025_WAHLKREISE);
+    if (!complete) {
+      throw new BundeswahlParseError(
+        `Malformed CSV: ${BTW2025.wahlkreise} has ${rows.length} rows, not the ${BTW2025_WAHLKREISE} Wahlkreise ` +
+          `numbered 1–${BTW2025_WAHLKREISE} each once — the file is truncated or not the published one.`,
+      );
+    }
     if (land !== undefined) {
       // A bare number matches the Land number ignoring leading zeros ("9" == "09").
       // A value that is exactly a Land abbreviation (case-insensitive) matches only
@@ -393,6 +490,7 @@ export class BundeswahlClient {
     }
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, BTW2025.structure, STRUCTURE_COLUMNS);
+    assertHasRows(parsed, BTW2025.structure);
     // Cells are trimmed, as every other dataset's mapper does: the upstream file has one
     // Wahlkreis name with a trailing space (16, "…Vorpommern-Greifswald II "), so a join
     // of `wahlkreise` names to these found nothing for it.
@@ -400,10 +498,18 @@ export class BundeswahlClient {
     for (const row of rows) {
       for (const key of Object.keys(row)) row[key] = row[key]!.trim();
     }
+    // The file ends with the national summary row, "Insgesamt" (Wahlkreis-Nr. 999), after
+    // every Land's: a file cut at a row boundary ends anywhere else.
+    if (rows[rows.length - 1]!["Wahlkreis-Nr."] !== "999") {
+      throw new BundeswahlParseError(
+        `Malformed CSV: ${BTW2025.structure} is incomplete — its last row is not the national summary ` +
+          '"Insgesamt" (Wahlkreis-Nr. 999); the file is truncated or not the published one.',
+      );
+    }
     if (includeAggregates !== true) {
       rows = rows.filter((r) => {
         const nr = (r["Wahlkreis-Nr."] ?? "").trim();
-        return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= 299;
+        return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= BTW2025_WAHLKREISE;
       });
     }
     if (wahlkreis !== undefined) {

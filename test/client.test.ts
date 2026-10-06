@@ -14,7 +14,7 @@ test("results() hits the kerg2 path and parses typed rows", async () => {
   const c = new BundeswahlClient({ transport: mt.transport });
   const rows = await c.results();
   assert.equal(pathOf(mt.last().url), BTW2025.results);
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 7);
   const gruene = rows.find((r) => r.gebietsart === "Bund" && r.gruppenname === "GRÜNE")!;
   assert.equal(gruene.stimme, 2);
   assert.equal(gruene.anzahl, 5762380);
@@ -28,14 +28,14 @@ test("results() hits the kerg2 path and parses typed rows", async () => {
 test("results() filters by area-type, area (number+name), party, vote and group-type", async () => {
   const c = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
   assert.equal((await c().results({ areaType: "Bund" })).length, 2);
-  assert.equal((await c().results({ areaType: "Wahlkreis" })).length, 2);
-  assert.equal((await c().results({ area: "005" })).length, 2); // Kiel by number
-  assert.equal((await c().results({ area: "5" })).length, 2); // ...and leading-zero-insensitive
-  assert.equal((await c().results({ area: "kiel" })).length, 2); // Kiel by name (ci)
+  assert.equal((await c().results({ areaType: "Wahlkreis" })).length, 4);
+  assert.equal((await c().results({ area: "005" })).length, 4); // Kiel by number
+  assert.equal((await c().results({ area: "5" })).length, 4); // ...and leading-zero-insensitive
+  assert.equal((await c().results({ area: "kiel" })).length, 4); // Kiel by name (ci)
   assert.equal((await c().results({ party: "grüne" })).length, 2); // ci substring
   assert.equal((await c().results({ vote: 1 })).length, 2);
-  assert.equal((await c().results({ vote: 2 })).length, 1);
-  assert.equal((await c().results({ groupType: "System" })).length, 1);
+  assert.equal((await c().results({ vote: 2 })).length, 2); // GRÜNE (Bund) and Übrige (Kiel)
+  assert.equal((await c().results({ groupType: "System" })).length, 4);
   assert.equal((await c().results({ areaType: "Wahlkreis", vote: 1, party: "SPD" })).length, 1);
   assert.equal((await c().results({ party: "nonesuch" })).length, 0);
 });
@@ -51,7 +51,7 @@ test("a truncated or ragged data row is a parse error, not a half-parsed row", a
       () => c.results(),
       (err) =>
         err instanceof BundeswahlParseError &&
-        err.message.includes(`data row 5 of ${BTW2025.results} has ${cells} cells, the header has 19`),
+        err.message.includes(`data row 8 of ${BTW2025.results} has ${cells} cells, the header has 19`),
       String(cells),
     );
   }
@@ -78,7 +78,7 @@ test("parties() hits its path and maps the columns", async () => {
   const c = new BundeswahlClient({ transport: mt.transport });
   const parties = await c.parties();
   assert.equal(pathOf(mt.last().url), BTW2025.parties);
-  assert.equal(parties.length, 3);
+  assert.equal(parties.length, 4);
   const spd = parties.find((p) => p.kurz === "SPD")!;
   assert.equal(spd.gruppenschluessel, "2");
   assert.equal(spd.gruppenartCsv, "Partei");
@@ -87,7 +87,7 @@ test("parties() hits its path and maps the columns", async () => {
 
 test("wahlkreise() hits its path and filters by Land (name, abbreviation, number)", async () => {
   const c = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.wahlkreiseCsv)).transport });
-  assert.equal((await c().wahlkreise()).length, 3);
+  assert.equal((await c().wahlkreise()).length, 299);
   assert.equal((await c().wahlkreise({ land: "Bayern" })).length, 1);
   assert.equal((await c().wahlkreise({ land: "BY" })).length, 1); // abbreviation
   assert.equal((await c().wahlkreise({ land: "01" })).length, 2); // Land number
@@ -124,15 +124,15 @@ test("a non-http(s) base URL is rejected by the client, never reaching a custom 
 });
 
 test("wahlkreise() --land with an exact abbreviation matches only that Land, not name substrings", async () => {
-  const csv =
-    "WKR_NR;WKR_NAME;LAND_NR;LAND_NAME;LAND_ABK\n" +
-    "001;Flensburg – Schleswig;01;Schleswig-Holstein;SH\n" +
-    "088;Aachen I;05;Nordrhein-Westfalen;NW\n" +
-    "168;Kassel;06;Hessen;HE\n" +
-    "198;Mainz;07;Rheinland-Pfalz;RP\n" +
-    "258;Stuttgart I;08;Baden-Württemberg;BW\n" +
-    "075;Berlin-Mitte;11;Berlin;BE\n" +
-    "069;Magdeburg;15;Sachsen-Anhalt;ST\n";
+  const csv = fx.wahlkreiseWith([
+    "001;Flensburg – Schleswig;01;Schleswig-Holstein;SH",
+    "088;Aachen I;05;Nordrhein-Westfalen;NW",
+    "168;Kassel;06;Hessen;HE",
+    "198;Mainz;07;Rheinland-Pfalz;RP",
+    "258;Stuttgart I;08;Baden-Württemberg;BW",
+    "075;Berlin-Mitte;11;Berlin;BE",
+    "069;Magdeburg;15;Sachsen-Anhalt;ST",
+  ]);
   const land = async (l: string) =>
     (await new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport }).wahlkreise({ land: l }))
       .map((w) => w.landAbk);
@@ -183,9 +183,9 @@ test("a malformed number or Stimme in kerg2 is a parse error naming the cell, no
   const row = (stimme: string, anzahl: string) =>
     `BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;SPD;1;${stimme};${anzahl};16,4;1;1;1;1;;\n`;
   for (const [extra, message] of [
-    [row("2", "0x10"), /column "Anzahl" in data row 5 of .*kerg2\.csv is not a number: "0x10"/],
-    [row("2", "1e3"), /column "Anzahl" in data row 5 .* is not a number: "1e3"/],
-    [row("02", "1"), /column "Stimme" in data row 5 .* must be 1, 2 or empty, got "02"/],
+    [row("2", "0x10"), /column "Anzahl" in data row 8 of .*kerg2\.csv is not a number: "0x10"/],
+    [row("2", "1e3"), /column "Anzahl" in data row 8 .* is not a number: "1e3"/],
+    [row("02", "1"), /column "Stimme" in data row 8 .* must be 1, 2 or empty, got "02"/],
   ] as const) {
     const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv + extra)).transport });
     await assert.rejects(() => c.results(), (err) => err instanceof BundeswahlParseError && message.test(err.message));
@@ -241,7 +241,7 @@ test("an unexpected Gebietsart is a parse error naming the cell; a case variant 
   const c1 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(relabelled)).transport });
   await assert.rejects(
     () => c1.results({ areaType: "Wahlkreis", area: "Kiel" }),
-    (e: unknown) => e instanceof BundeswahlParseError && /column "Gebietsart" in data row 3 .* got "WK"/.test(e.message),
+    (e: unknown) => e instanceof BundeswahlParseError && /column "Gebietsart" in data row 4 .* got "WK"/.test(e.message),
   );
   const upper = fx.kerg2Csv.replace(/;Bund;99;/g, ";BUND;99;");
   const c2 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(upper)).transport });
@@ -290,15 +290,49 @@ test("a dot-decimal number is refused as ambiguous unless the column uses thousa
   const c1 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(dotted)).transport });
   await assert.rejects(
     () => c1.results(),
-    (e: unknown) => e instanceof BundeswahlParseError && /column "Prozent" in data row 3 .* "22\.076", which reads as 22076 .* or 22\.076/.test(e.message),
+    (e: unknown) => e instanceof BundeswahlParseError && /column "Prozent" in data row 5 .* "22\.076", which reads as 22076 .* or 22\.076/.test(e.message),
   );
   // A column that groups its thousands (8.149.124; no large value without dots) keeps the German reading.
   const grouped = fx.kerg2Csv
-    .replace(";60510631;", ";60.510.631;")
+    .replaceAll(";60510631;", ";60.510.631;")
     .replace(";5762380;", ";5.762.380;")
     .replace(";36690;", ";36.690;")
     .replace(";43281;", ";43.281;");
   const c2 = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(grouped)).transport });
   const rows = await c2.results({ area: "Kiel", party: "SPD" });
   assert.equal(rows[0]!.anzahl, 36690);
+});
+
+test("a file cut at a row boundary, or with no data rows, is a parse error in every dataset", async () => {
+  const lines = (csv: string) => csv.split("\n");
+  const withoutLast = (csv: string, n = 1) => `${lines(csv).slice(0, -1 - n).join("\n")}\n`;
+  const headerOnly = (csv: string, header: string) => `${csv.slice(0, csv.indexOf(header) + header.length)}\n`;
+  const kerg2Header = lines(fx.kerg2Csv)[5]!;
+  const cases: Array<[string, string, (c: BundeswahlClient) => Promise<unknown>, RegExp]> = [
+    ["kerg2 header only", headerOnly(fx.kerg2Csv, kerg2Header), (c) => c.results(), /has a header but no data rows/],
+    ["kerg2 cut inside an area", withoutLast(fx.kerg2Csv), (c) => c.results({ area: "Kiel" }), /is incomplete — its last row \(Kiel, GRÜNE\) is not an area's closing "Übrige" row/],
+    [
+      "kerg2 cut at an area boundary",
+      fx.kerg2Csv.split("\n").filter((l) => !l.includes(";Kiel;")).join("\n") +
+        "BT;23.02.2025;Land;01;Schleswig-Holstein;BUND;99;System-Gruppe;Übrige;1000;2;;;;;;;;\n",
+      (c) => c.results({ areaType: "Bund" }),
+      /the Wahlkreise of Schleswig-Holstein don't add up to the Land's Wahlberechtigte/,
+    ],
+    [
+      "kerg2 with a Land missing",
+      fx.kerg2Csv.replace(/^BT;23\.02\.2025;Land;.*\n/m, ""),
+      (c) => c.results(),
+      /the Länder's Wahlberechtigte don't add up to the Bund's/,
+    ],
+    ["parties header only", headerOnly(fx.partiesCsv, "GruppennameKurz;Gruppenname"), (c) => c.parties(), /has a header but no data rows/],
+    ["parties cut", withoutLast(fx.partiesCsv), (c) => c.parties(), /its last row is not the closing "Übrige" group/],
+    ["wahlkreise header only", headerOnly(fx.wahlkreiseCsv, "LAND_ABK"), (c) => c.wahlkreise(), /has 0 rows, not the 299 Wahlkreise/],
+    ["wahlkreise cut", withoutLast(fx.wahlkreiseCsv, 3), (c) => c.wahlkreise({ land: "BY" }), /has 296 rows, not the 299 Wahlkreise/],
+    ["structure header only", headerOnly(fx.structureCsv, "Bevölkerung"), (c) => c.structure(), /has a header but no data rows/],
+    ["structure cut", withoutLast(fx.structureCsv), (c) => c.structure(), /its last row is not the national summary "Insgesamt"/],
+  ];
+  for (const [label, csv, call, message] of cases) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(() => call(c), (e: unknown) => e instanceof BundeswahlParseError && message.test(e.message), label);
+  }
 });

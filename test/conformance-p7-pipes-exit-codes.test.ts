@@ -19,18 +19,23 @@ const USAGE = { argv: ["--no-such-option"], exit: 2 };
 /** argv that prints the server's big answer, given the mock's base URL. */
 const bigOutputArgv = (base: string): string[] => ["--base-url", base, "results"];
 /**
- * A large answer for that command (≈ 2 MB of output): the fixture's kerg2 file with its
- * two Kiel rows repeated for 299 Wahlkreise × 10 groups.
+ * A large answer for that command (≈ 2 MB of output): the fixture's preamble and header,
+ * then a structurally complete file (the client checks it) — the Bund and one Land with
+ * 299 000 Wahlberechtigte, and 299 Wahlkreise with 1 000 each, ten party rows and the
+ * closing "Übrige" rows.
  */
 const bigBody = (): unknown => {
-  const lines = kerg2Csv.split("\n");
-  const head = lines.slice(0, 8).join("\n");
-  const rows: string[] = [];
+  const head = kerg2Csv.split("\n").slice(0, 6).join("\n");
+  const system = (area: string, ueg: string, count: number) =>
+    `BT;23.02.2025;${area};${ueg};System-Gruppe;Wahlberechtigte;-4;;${count};;1;;;;;`;
+  const rows: string[] = [system("Bund;99;Bundesgebiet", ";", 299_000), system("Land;01;Schleswig-Holstein", "BUND;99", 299_000)];
   for (let wk = 1; wk <= 299; wk++) {
     const nr = String(wk).padStart(3, "0");
+    rows.push(system(`Wahlkreis;${nr};Wahlkreis ${nr}`, "LAND;01", 1000));
     for (let g = 1; g <= 10; g++) {
       rows.push(`BT;23.02.2025;Wahlkreis;${nr};Wahlkreis ${nr};LAND;01;Partei;Partei ${g};${g};1;36690;22,076344;40000;25,0;-8,3;-2,9;;Partei 1`);
     }
+    rows.push(`BT;23.02.2025;Wahlkreis;${nr};Wahlkreis ${nr};LAND;01;System-Gruppe;Übrige;1000;2;;;;;;;;Partei 1`);
   }
   return `${head}\n${rows.join("\n")}\n`;
 };

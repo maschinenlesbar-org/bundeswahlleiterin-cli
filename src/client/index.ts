@@ -1,6 +1,6 @@
 // Public entry point for the API client library.
 
-export { BundeswahlClient, BTW2025 } from "./client.js";
+export { BundeswahlClient, BTW2025, BTW2025_WAHLKREISE } from "./client.js";
 export type { BundeswahlClientOptions } from "./client.js";
 export {
   RequestEngine,
