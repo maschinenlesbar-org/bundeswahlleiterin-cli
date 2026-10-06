@@ -46,6 +46,8 @@ const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
 export interface RawResponse {
   data: Buffer;
   contentType: string;
+  /** The response's Content-Encoding header ("" when absent). */
+  contentEncoding: string;
   status: number;
 }
 
@@ -576,7 +578,8 @@ export class RequestEngine {
         throw this.toApiError(url, status, body, tooLong ? retryAfter : undefined);
       }
 
-      return { data: body, contentType, status };
+      const contentEncoding = String(responseHeaders["content-encoding"] ?? "");
+      return { data: body, contentType, contentEncoding, status };
     }
   }
 
@@ -595,6 +598,20 @@ export class RequestEngine {
    */
   async getText(path: string, query?: QueryParams): Promise<string> {
     const res = await this.request(path, query);
+    // The client sends no Accept-Encoding, so a compressed body is a server or proxy
+    // that compresses anyway. Say so: the strict decoder below would otherwise blame the
+    // character set ("not valid UTF-8 … e.g. Latin-1"), pointing at the wrong cause.
+    const encoding = res.contentEncoding.trim().toLowerCase();
+    const gzipMagic = res.data.length >= 2 && res.data[0] === 0x1f && res.data[1] === 0x8b;
+    if ((encoding !== "" && encoding !== "identity") || gzipMagic) {
+      const what = encoding !== "" && encoding !== "identity"
+        ? `Content-Encoding: ${cutForMessage(sanitizeServerText(encoding))}`
+        : "gzip data without a Content-Encoding";
+      throw new BundeswahlParseError(
+        `The response from ${path} is compressed (${what}) although the client asked for no ` +
+          "compression — a server or proxy compressed it anyway, so it can't be read as CSV.",
+      );
+    }
     const htmlPage = (): BundeswahlParseError =>
       new BundeswahlParseError(
         `Expected a CSV file from ${path} but received an HTML page — the file may ` +

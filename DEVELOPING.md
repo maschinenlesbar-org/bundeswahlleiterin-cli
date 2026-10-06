@@ -153,7 +153,10 @@ strictly; without one (the host declares none) as strict UTF-8, the pinned files
 A body that isn't valid in that charset, an unknown label, and a UTF-8 body labelled as a
 single-byte charset (which would garble every umlaut) are each a `BundeswahlParseError`,
 never text with U+FFFD or mojibake in it. The media type itself is ignored: the host serves
-the CSVs as `text/csv`, `text/plain` or `application/octet-stream`.
+the CSVs as `text/csv`, `text/plain` or `application/octet-stream`. The client asks for no
+compression (it sends no `Accept-Encoding`), so a compressed body — a `Content-Encoding`
+other than `identity`, or gzip data without one — is a server or proxy compressing anyway:
+a `BundeswahlParseError` that says so, rather than a misleading charset diagnosis.
 
 ## The CSV parser
 

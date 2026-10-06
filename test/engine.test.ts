@@ -338,3 +338,22 @@ test("validateBaseUrl returns the base URL without trailing slashes, or throws",
   assert.equal(validateBaseUrl("https://h.test"), "https://h.test");
   assert.throws(() => validateBaseUrl(""), /^BundeswahlValidationError: Invalid baseUrl: Expected a non-empty URL\.$/);
 });
+
+test("a compressed body is reported as compressed, not as a character-set problem", async () => {
+  const { gzipSync } = await import("node:zlib");
+  const gz = gzipSync(Buffer.from("Gruppenschluessel;Gruppenname\n2;SPD\n"));
+  const cases: Array<[Record<string, string>, RegExp]> = [
+    [{ "content-type": "text/csv", "content-encoding": "gzip" }, /is compressed \(Content-Encoding: gzip\)/],
+    [{ "Content-Encoding": "br" }, /is compressed \(Content-Encoding: br\)/],
+    [{ "content-type": "text/csv" }, /is compressed \(gzip data without a Content-Encoding\)/],
+  ];
+  for (const [headers, message] of cases) {
+    const engine = new RequestEngine({ transport: async () => ({ status: 200, headers, body: gz }) });
+    await assert.rejects(() => engine.getText("/p.csv"), (e: unknown) => e instanceof BundeswahlParseError && message.test(e.message));
+  }
+  // `identity` is no compression.
+  const plain = new RequestEngine({
+    transport: async () => ({ status: 200, headers: { "content-encoding": "identity" }, body: Buffer.from("a;b\n") }),
+  });
+  assert.equal(await plain.getText("/p.csv"), "a;b\n");
+});
