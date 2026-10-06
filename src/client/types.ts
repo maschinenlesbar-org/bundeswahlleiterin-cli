@@ -75,7 +75,7 @@ export interface Wahlkreis {
  * A structural-data row (Strukturdaten) for one Wahlkreis. The file has ~50
  * demographic/economic columns whose names vary, so it is exposed as an open
  * key→value map (column name → cell), preserving whatever the file provides.
- * Values stay strings in German number format (e.g. "128,0"); the `Fußnoten`
+ * Values stay strings (trimmed) in German number format (e.g. "128,0"); the `Fußnoten`
  * column notes where a column holds a city- or Kreis-wide value.
  */
 export type StructureRow = Record<string, string>;

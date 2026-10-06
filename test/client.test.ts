@@ -261,3 +261,11 @@ test("an echoed value is cut at 500 characters in an error message", async () =>
     (e: unknown) => e instanceof BundeswahlValidationError && e.message.length < 600,
   );
 });
+
+test("structure() trims its cells like the other datasets (a trailing space upstream)", async () => {
+  const padded = fx.structureCsv.replace("Bayern;212;München-Nord;", "Bayern ;212; München-Nord ;");
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(padded)).transport });
+  const [row] = await c.structure({ wahlkreis: "212" });
+  assert.equal(row!["Wahlkreis-Name"], "München-Nord");
+  assert.equal(row!["Land"], "Bayern");
+});

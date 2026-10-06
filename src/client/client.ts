@@ -345,7 +345,13 @@ export class BundeswahlClient {
     }
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);
+    // Cells are trimmed, as every other dataset's mapper does: the upstream file has one
+    // Wahlkreis name with a trailing space (16, "…Vorpommern-Greifswald II "), so a join
+    // of `wahlkreise` names to these found nothing for it.
     let rows = rowsToObjects(parsed);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) row[key] = row[key]!.trim();
+    }
     if (includeAggregates !== true) {
       rows = rows.filter((r) => {
         const nr = (r["Wahlkreis-Nr."] ?? "").trim();

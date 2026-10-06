@@ -172,4 +172,4 @@ A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps i
 - **Numbers are numbers, gaps are `null`.** In `results`, `anzahl`/`prozent` parse from
   the German format; empty or `–` cells become `null`, distinct from `0`. A cell that is
   neither (a malformed number) is an error (exit 1), never a `null`. `structure` values
-  stay strings.
+  stay strings, trimmed like every other dataset's cells.
