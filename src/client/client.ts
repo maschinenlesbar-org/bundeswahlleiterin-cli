@@ -11,6 +11,7 @@
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
 import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
 import { BundeswahlParseError, BundeswahlValidationError } from "./errors.js";
+import { assertValid, knownKeysProblem } from "./validate.js";
 import type {
   AreaType,
   Party,
@@ -58,6 +59,11 @@ function includesCi(haystack: string, needle: string): boolean {
 }
 
 const AREA_TYPES: readonly AreaType[] = ["Bund", "Land", "Wahlkreis"];
+
+/** The keys each method's filter object takes; any other key is a validation error. */
+const RESULTS_KEYS = ["areaType", "area", "party", "vote", "groupType"] as const;
+const WAHLKREISE_KEYS = ["land"] as const;
+const STRUCTURE_KEYS = ["wahlkreis", "includeAggregates"] as const;
 
 /**
  * Library-side validation of a text filter, matching the CLI's parse-time rule: a
@@ -167,7 +173,9 @@ export class BundeswahlClient {
   async results(query: ResultsQuery = {}): Promise<ResultRow[]> {
     // Validate before fetching, as the CLI does at parse time: for a library caller a
     // lower-case "bund", a string "2" or a blank party used to match nothing (or
-    // everything) silently. areaType is case-insensitive, like --area-type.
+    // everything) silently. areaType is case-insensitive, like --area-type. A misspelled
+    // key (`Party`, `areatype`) or a non-object query used to be ignored: every row back.
+    assertValid("query", query, knownKeysProblem(RESULTS_KEYS));
     const q = query as Record<string, unknown>;
     let areaType: AreaType | undefined;
     if (q["areaType"] !== undefined) {
@@ -267,6 +275,7 @@ export class BundeswahlClient {
 
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
   async wahlkreise(opts: { land?: string } = {}): Promise<Wahlkreis[]> {
+    assertValid("options", opts, knownKeysProblem(WAHLKREISE_KEYS));
     const land = textFilter("land", opts.land);
     const text = await this.engine.getText(BTW2025.wahlkreise);
     const parsed = parseDataset(text, "WKR_NR", BTW2025.wahlkreise, WAHLKREIS_COLUMNS);
@@ -311,6 +320,7 @@ export class BundeswahlClient {
    * Wahlkreis number (leading zeros ignored) or name substring.
    */
   async structure(opts: { wahlkreis?: string; includeAggregates?: boolean } = {}): Promise<StructureRow[]> {
+    assertValid("options", opts, knownKeysProblem(STRUCTURE_KEYS));
     const wahlkreis = textFilter("wahlkreis", opts.wahlkreis);
     const text = await this.engine.getText(BTW2025.structure);
     const parsed = parseDataset(text, "Land", BTW2025.structure, STRUCTURE_COLUMNS);

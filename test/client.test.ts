@@ -224,3 +224,14 @@ test("the library validates its filters before any request, like the CLI", async
   const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
   assert.equal((await c.results({ areaType: "bund" as never })).length, 2);
 });
+
+test("an unknown key in a method's options or the client options is a validation error, no request", async () => {
+  const mt = makeMockTransport(() => csvResponse(fx.wahlkreiseCsv));
+  const c = new BundeswahlClient({ transport: mt.transport });
+  await assert.rejects(() => c.wahlkreise({ Land: "Bayern" } as never), /Invalid options: Unknown key "Land"/);
+  await assert.rejects(() => c.structure({ aggregates: true } as never), /Invalid options: Unknown key "aggregates"/);
+  await assert.rejects(() => c.results(5 as never), /Invalid query: Expected an object/);
+  await assert.rejects(() => c.wahlkreise(null as never), BundeswahlValidationError);
+  assert.equal(mt.calls.length, 0);
+  assert.throws(() => new BundeswahlClient({ timeout: 5 } as never), /Invalid options: Unknown key "timeout"/);
+});

@@ -23,6 +23,26 @@ export function assertValid<T>(name: string, value: T, problem: Problem<T>): T {
 }
 
 /**
+ * An options object must be a plain object (or `undefined`, for "none") whose own keys
+ * are all in `known`. A misspelled or unknown key (`areatype`, `timeout`), or a
+ * `__proto__` key from `JSON.parse`, used to be ignored without a word, so
+ * `results({ Party: "SPD" })` returned every party and `results(5)` every row. Returns
+ * a `Problem` naming the first unknown key (cut, JSON-quoted) and the known ones.
+ */
+export function knownKeysProblem(known: readonly string[]): Problem<unknown> {
+  return (value) => {
+    if (value === undefined) return undefined;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return "Expected an object.";
+    for (const key of Object.keys(value)) {
+      if (!known.includes(key)) {
+        return `Unknown key ${JSON.stringify(key.slice(0, 60))}; expected one of ${known.join(", ")}.`;
+      }
+    }
+    return undefined;
+  };
+}
+
+/**
  * A value that goes into an HTTP header (the User-Agent, a default header). Node's
  * HTTP layer throws an opaque "Invalid character in header content" at request time
  * for a CR/LF (or any other C0 control, or DEL) and for any character above U+00FF,

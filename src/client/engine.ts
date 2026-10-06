@@ -22,7 +22,20 @@ import {
   credentialsIn,
   redactCredentials,
 } from "./errors.js";
-import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem } from "./validate.js";
+import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, knownKeysProblem } from "./validate.js";
+
+/** The keys {@link EngineOptions} has; any other key is a BundeswahlValidationError. */
+export const ENGINE_OPTION_KEYS = [
+  "baseUrl",
+  "transport",
+  "userAgent",
+  "defaultHeaders",
+  "timeoutMs",
+  "maxRetries",
+  "retryDelayMs",
+  "maxResponseBytes",
+  "sleep",
+] as const;
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
 const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
@@ -356,6 +369,8 @@ export class RequestEngine {
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: EngineOptions = {}) {
+    // A misspelled option (`timeout`, `maxRetry`) was ignored and its default used.
+    assertValid("options", options, knownKeysProblem(ENGINE_OPTION_KEYS));
     // Validate the raw value, before any slash strip, so "https://h/ " is caught too.
     this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.#credentials = credentialsIn(this.#baseUrl).flatMap((raw) => {

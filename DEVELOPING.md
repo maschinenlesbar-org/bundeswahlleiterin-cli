@@ -224,8 +224,10 @@ before any request: a base URL that is blank, has surrounding whitespace, is not
 or has a query/fragment, a numeric
 option outside its range, a `userAgent` or `defaultHeaders` value that is blank or holds
 a control character (CR/LF included), DEL or a character above U+00FF (and a
-`defaultHeaders` name that is not an HTTP token), an unknown `areaType`, a `vote` other than `1`/`2`, or a
-blank text filter — the library applies the same rules as the CLI's parsers), all
+`defaultHeaders` name that is not an HTTP token), an unknown `areaType`, a `vote` other than `1`/`2`, a
+blank text filter, or a query, options object or client options with a key the method
+doesn't take (`results({ Party: "SPD" })` used to return every party; `ENGINE_OPTION_KEYS`
+lists the client's) — the library applies the same rules as the CLI's parsers), all
 extending `BundeswahlError`.
 
 ### Input validation
@@ -238,6 +240,8 @@ throw). The CLI's commander parsers call the same `…Problem` functions and tur
 reason into a usage error, and `run.ts` maps a `BundeswahlValidationError` raised during
 an action to exit 2, printed as `Error: <message>`, so the CLI and the library cannot
 drift apart.
+`test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
+keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
 
 ## Testing
 

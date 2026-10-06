@@ -5,6 +5,7 @@ export type { BundeswahlClientOptions } from "./client.js";
 export {
   RequestEngine,
   DEFAULT_BASE_URL,
+  ENGINE_OPTION_KEYS,
   MAX_RETRIES,
   MAX_RETRY_AFTER_MS,
   assertHeaderValue,
@@ -29,7 +30,7 @@ export {
   redactCredentials,
 } from "./errors.js";
 
-export { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem } from "./validate.js";
+export { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, knownKeysProblem } from "./validate.js";
 export type { Problem } from "./validate.js";
 
 export * from "./types.js";
