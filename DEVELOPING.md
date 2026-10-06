@@ -299,6 +299,14 @@ npm test          # builds, then runs `node --test` over dist/test
   `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
   one input through `run()` and through the library on one recording mock transport so a
   test can assert both give the same outcome.
+- **`io.test.ts`** — `handleOutputErrors()`: a reader that has gone (EPIPE, ENOTCONN).
+- **`conformance-p*.test.ts`** — the shared conformance tests of the 2026-10-05 fix plan,
+  copied from the sibling repos with only their adapter block changed: P1 CLI redaction,
+  P2 library redaction, P4/P19 base-URL validation (the P19 case is skipped: no environment
+  variable here), P5 the transport contract, P6 the retry policy, P7 pipes and exit codes
+  (runs the built bin), P8/P9/P13 charset, malformed bodies and wrong-typed input, P10 strict
+  filters, P12 `-o -`. The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  of the client's completeness checks.
 
 ## Continuous integration
 
