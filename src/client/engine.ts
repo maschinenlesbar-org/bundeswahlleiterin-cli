@@ -261,6 +261,60 @@ function hasTransientCode(err: unknown, depth = 0): boolean {
 }
 
 /**
+ * Decode a CSV body by the `charset` its Content-Type declares (P8), strictly.
+ *
+ * - No charset, or a UTF-8 one: strict UTF-8 — the pinned files are UTF-8 (the Wahlkreis
+ *   file is the `…_utf8.csv` variant of one also published in another charset) and the
+ *   host declares no charset. Buffer#toString would turn every non-UTF-8 byte into U+FFFD,
+ *   so a re-pin to the wrong variant would pass unnoticed and every umlaut filter would
+ *   silently match nothing; a body that isn't UTF-8 is a BundeswahlParseError instead.
+ * - Another known label (`iso-8859-1`, `windows-1252`, …): decoded with it, so a file in
+ *   another character set that says so reads correctly. One guard: a body declared as a
+ *   single-byte charset that is valid UTF-8 with non-ASCII bytes is a mislabelled UTF-8 file
+ *   (Apache's AddDefaultCharset does this); decoding it as declared would turn every umlaut
+ *   into mojibake ("Ã¼") with exit 0, so it is a BundeswahlParseError.
+ * - An unknown label: a BundeswahlParseError naming it.
+ *
+ * A leading byte-order mark is dropped (TextDecoder's default).
+ */
+function decodeCsvBody(body: Buffer, contentType: string, path: string): string {
+  const declared = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(declared ?? "utf-8", { fatal: true });
+  } catch {
+    throw new BundeswahlParseError(
+      `Unsupported response charset "${sanitizeServerText(declared ?? "")}" from ${path}.`,
+    );
+  }
+  if (decoder.encoding !== "utf-8") {
+    const nonAscii = body.some((b) => b >= 0x80);
+    let utf8 = false;
+    try {
+      new TextDecoder("utf-8", { fatal: true }).decode(body);
+      utf8 = true;
+    } catch {
+      // not UTF-8: the declared charset is plausible
+    }
+    if (nonAscii && utf8) {
+      throw new BundeswahlParseError(
+        `The response from ${path} declares charset "${sanitizeServerText(declared ?? "")}" but is ` +
+          "UTF-8 — decoding it as declared would garble every umlaut.",
+      );
+    }
+  }
+  try {
+    return decoder.decode(body);
+  } catch {
+    const declaredPart = declared === undefined ? "" : ` (declared charset "${sanitizeServerText(declared)}")`;
+    throw new BundeswahlParseError(
+      `The response from ${path} is not valid UTF-8${declaredPart} — the file may have been ` +
+        "replaced by a variant in another character set (e.g. Latin-1).",
+    );
+  }
+}
+
+/**
  * Check a base URL and return it without trailing slashes. Throws a
  * BundeswahlValidationError (`Invalid baseUrl: <reason>`) for a blank value, one with
  * surrounding whitespace, one that does not parse, a scheme other than http(s), or a
@@ -493,11 +547,12 @@ export class RequestEngine {
    * an empty body — both surface as a clear BundeswahlParseError rather than
    * reaching the CSV parser.
    *
-   * NOTE: the response Content-Type is intentionally *ignored*. The site/CDN serves
+   * NOTE: the response's media type is intentionally *ignored*. The site/CDN serves
    * the CSVs with varying types (text/csv, text/plain, application/octet-stream), so
    * we sniff the body — an `<!doctype html>` / `<html>` prefix is the HTML guard —
    * rather than trust the header. Don't "harden" this into Content-Type validation;
-   * it would reject valid files.
+   * it would reject valid files. Only its `charset` parameter is read (see
+   * {@link decodeCsvBody}).
    */
   async getText(path: string, query?: QueryParams): Promise<string> {
     const res = await this.request(path, query);
@@ -510,19 +565,12 @@ export class RequestEngine {
       const head = t.replace(/^\uFEFF/, "").trimStart().slice(0, 200).toLowerCase();
       return head.startsWith("<!doctype html") || head.startsWith("<html");
     };
-    // The pinned files are UTF-8 (the Wahlkreis file is the `…_utf8.csv` variant of
-    // one also published in another charset). Decode strictly: Buffer#toString would
-    // turn every non-UTF-8 byte into U+FFFD, so a re-pin to the wrong variant would
-    // pass unnoticed and every umlaut filter would silently match nothing.
     let text: string;
     try {
-      text = new TextDecoder("utf-8", { fatal: true }).decode(res.data);
-    } catch {
+      text = decodeCsvBody(res.data, res.contentType, path);
+    } catch (err) {
       if (looksLikeHtml(res.data.toString("latin1"))) throw htmlPage();
-      throw new BundeswahlParseError(
-        `The response from ${path} is not valid UTF-8 — the file may have been replaced by ` +
-          "a variant in another character set (e.g. Latin-1).",
-      );
+      throw err;
     }
     if (looksLikeHtml(text)) throw htmlPage();
     if (text.trim().length === 0) {

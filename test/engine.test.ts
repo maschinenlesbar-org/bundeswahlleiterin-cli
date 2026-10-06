@@ -218,6 +218,36 @@ test("getText rejects a body that is not valid UTF-8 instead of decoding it to U
   assert.equal(await e3.getText("/p.csv"), "a;ü\n");
 });
 
+test("getText decodes a body by its declared charset (P8)", async () => {
+  const text = "Gruppenschluessel;Gruppenname\n2;Müller µ\n";
+  for (const [contentType, encoding] of [
+    ["text/csv; charset=iso-8859-1", "latin1"],
+    ["text/csv; charset=windows-1252", "latin1"],
+    ['text/csv; charset="UTF-8"', "utf8"],
+    ["text/csv", "utf8"],
+  ] as const) {
+    const engine = new RequestEngine({
+      transport: makeMockTransport(() => rawResponse(Buffer.from(text, encoding), contentType)).transport,
+    });
+    assert.equal(await engine.getText("/p.csv"), text, contentType);
+  }
+  // An unknown label is a parse error naming it.
+  const unknown = new RequestEngine({
+    transport: makeMockTransport(() => rawResponse(Buffer.from(text), "text/csv; charset=x-klingon")).transport,
+  });
+  await assert.rejects(() => unknown.getText("/p.csv"), (err: unknown) => err instanceof BundeswahlParseError && /x-klingon/.test(err.message));
+  // A UTF-8 body labelled Latin-1 (AddDefaultCharset) would turn "ü" into "Ã¼": refused.
+  const mislabelled = new RequestEngine({
+    transport: makeMockTransport(() => rawResponse(Buffer.from(text, "utf8"), "text/csv; charset=ISO-8859-1")).transport,
+  });
+  await assert.rejects(() => mislabelled.getText("/p.csv"), (err: unknown) => err instanceof BundeswahlParseError && /declares charset "ISO-8859-1" but is UTF-8/.test(err.message));
+  // A pure-ASCII body is the same in both, so the label is harmless.
+  const ascii = new RequestEngine({
+    transport: makeMockTransport(() => rawResponse(Buffer.from("a;b\n1;2\n"), "text/csv; charset=iso-8859-1")).transport,
+  });
+  assert.equal(await ascii.getText("/p.csv"), "a;b\n1;2\n");
+});
+
 test("numeric engine options outside their range are rejected at construction", () => {
   for (const [name, value] of [
     ["timeoutMs", -1],

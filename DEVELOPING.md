@@ -148,6 +148,13 @@ transport, `fetch` against a silent server, a 2 MiB body and every body and head
 
 The dataset paths are exported as `BTW2025` for reference.
 
+**Character set.** `getText` decodes a body by the `charset` its Content-Type declares,
+strictly; without one (the host declares none) as strict UTF-8, the pinned files' encoding.
+A body that isn't valid in that charset, an unknown label, and a UTF-8 body labelled as a
+single-byte charset (which would garble every umlaut) are each a `BundeswahlParseError`,
+never text with U+FFFD or mojibake in it. The media type itself is ignored: the host serves
+the CSVs as `text/csv`, `text/plain` or `application/octet-stream`.
+
 ## The CSV parser
 
 [`csv.ts`](src/client/csv.ts) is a small, dependency-free parser:
@@ -183,7 +190,7 @@ src/
     types.ts     # ResultRow / Party / Wahlkreis / StructureRow + ResultsQuery
     query.ts     # dependency-free query-string builder
     http.ts      # the Transport interface + default node:http/https transport
-    engine.ts    # URL building, retry/backoff, getText (strict UTF-8, HTML/empty guards), errors
+    engine.ts    # URL building, retry/backoff, getText (declared charset, else strict UTF-8; HTML/empty guards), errors
     errors.ts    # BundeswahlError / …ApiError / …NetworkError / …ValidationError / …ParseError
     validate.ts  # input rules as pure `…Problem` functions + assertValid (shared with the CLI)
     client.ts    # BundeswahlClient — results/parties/wahlkreise/structure (+ BTW2025 paths)
