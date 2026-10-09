@@ -502,3 +502,17 @@ test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", as
     assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
   }
 });
+
+test("the -o failure drops Node's \", open '<path>'\" tail also when the path holds a line break", async () => {
+  for (const path of ["/nonexistent\nZZ/x", "/nonexistent\rZZ/x", "/nonexistent/x"]) {
+    const cli = makeCli();
+    cli.deps.io.writeFile = (p) => {
+      throw Object.assign(new Error(`ENOENT: no such file or directory, open '${p}'`), { code: "ENOENT" });
+    };
+    assert.equal(await run(["-o", path, "parties"], cli.deps), 1);
+    assert.equal(cli.err.length, 1, cli.err.join("\n"));
+    const msg = untimed(cli.err[0] as string);
+    assert.match(msg, /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent.*: ENOENT: no such file or directory$/);
+    assert.doesNotMatch(msg, /open '/);
+  }
+});

@@ -193,8 +193,8 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
       // user error, not an internal fault — surface it as a clean OutputError (logged
       // under bundeswahl.output) instead of letting the raw fs exception hit the
       // "Unexpected error" path. Drop the `, open '<path>'` tail since we already name
-      // the path ourselves.
-      const reason = err instanceof Error ? err.message.replace(/,\s*open\s+'.*'$/, "") : String(err);
+      // the path ourselves; the `s` flag lets it span a path with a line break in it.
+      const reason = err instanceof Error ? err.message.replace(/,\s*open\s+'.*'$/s, "") : String(err);
       throw new OutputError(`Could not write to ${global.output}: ${reason}`, { cause: err });
     }
     logOf(deps).info("output", `Wrote ${data.length} bytes to ${global.output}`);
