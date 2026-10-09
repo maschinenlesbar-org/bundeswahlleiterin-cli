@@ -365,3 +365,21 @@ test("a --user-agent with control or non-Latin-1 characters is a usage error, no
   assert.equal(await run(["--user-agent", "bot\tmüller/1.0", "parties"], ok.deps), 0);
   assert.equal(ok.mt.last().headers?.["User-Agent"], "bot\tmüller/1.0");
 });
+
+test("a line break, ESC or bidi control in a typed value never forges a record (--party, -o)", async () => {
+  const forged = "x\n2026-10-09T00:00:00.000Z INFO  [bundeswahl.api] forged\u001b]0;title\u0007\u202e\u2028";
+  const record = /^\S+Z (ERROR|WARN |INFO ) \[bundeswahl\.[a-z-]+\] /;
+  const raw = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e]/;
+  const party = makeCli();
+  assert.equal(await run(["results", "--party", `-${forged}`], party.deps), 2);
+  // A second run writes the same path: the "Wrote" note, then the refusal.
+  const output = makeCli();
+  assert.equal(await run(["-o", forged, "parties"], output.deps), 0);
+  assert.equal(await run(["-o", forged, "parties"], output.deps), 1);
+  for (const err of [party.err, output.err]) {
+    for (const line of err) {
+      assert.match(line, record, JSON.stringify(line));
+      assert.doesNotMatch(line, raw, JSON.stringify(line));
+    }
+  }
+});
