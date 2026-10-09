@@ -404,7 +404,7 @@ header, cut off, compressed, empty or in an unknown charset), `http` (the connec
 `output` (`Wrote N bytes` after `-o`, or any failure to write that file, the refusal to
 overwrite one included: an `OutputError`, and a stdout write error). Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
-parses it (`logFormatFromArgv`, which skips the value of every option that takes one, as
+parses it (`logFormatFromArgv`, which skips the value of one of the program's own value options, as
 commander does, and is used only for the records of a parse error; a `preAction` hook
 then sets the format commander parsed, so `--user-agent --log-format=jsonl` logs text),
 so commander's own usage errors are records too: its `error: …` an ERROR of
