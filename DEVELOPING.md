@@ -320,7 +320,8 @@ npm test          # builds, then runs `node --test` over dist/test
 - **`cli.test.ts`** — command parsing, the `results` filters, `--output`, and exit
   codes — mocked client.
 - **`log.test.ts`** — the record helpers of `src/cli/log.ts` on their own
-  (`escapeForRecord`, `formatLogRecord`); the CLI-level checks are P23's.
+  (`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
+  P23's.
 - **`validate.test.ts`** — `assertValid`, the `run.ts` mapping of
   `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
   one input through `run()` and through the library on one recording mock transport so a
@@ -415,6 +416,8 @@ format. `CliDeps.now` makes the
 timestamps testable. stdout carries data only. What happens outside `run()`, in the bin
 shim, is logged too, through `processLogger(argv)` (the format argv asks for, the run's
 redaction): a stdout write error (`handleOutputErrors`) as an ERROR of `bundeswahl.output`,
-and the last-resort `Unexpected error: …` when `run()` itself rejects as an ERROR of
-`bundeswahl.cli`. Conformance test P23 checks all of this, and its body is
+the last-resort `Unexpected error: …` when `run()` itself rejects as an ERROR of
+`bundeswahl.cli`, and Node's own process warnings (`NODE_TLS_REJECT_UNAUTHORIZED=0`) as
+WARN records of `bundeswahl.cli`: the shim installs `installWarningLog`, which removes
+Node's default `warning` listener and logs `(node) <name>: <message>`. Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.

@@ -2,11 +2,14 @@
 // Bin shim: parse argv, run the CLI, and set the process exit code.
 
 import { handleOutputErrors } from "./io.js";
+import { installWarningLog } from "./log.js";
 import { processLogger, run } from "./run.js";
 
 const argv = process.argv.slice(2);
 // What happens outside run() is logged too, in the format argv asks for.
 const log = processLogger(argv);
+// Node's own process warnings are records too, not plain lines.
+installWarningLog(process, log);
 // A closed pipe (`bundeswahl results | head`) is ordinary use: exit quietly instead of
 // an unhandled-EPIPE stack trace.
 handleOutputErrors(process, undefined, log);
