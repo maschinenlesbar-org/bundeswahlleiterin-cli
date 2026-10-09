@@ -90,21 +90,23 @@ for the Authorization header at request time; write `%25`) throws
 selects the default host.
 
 A `user:password@` in the base URL (a mirror behind a login) never reaches the CLI's
-output. `credentialsIn(value)` finds the exact userinfo of a URL-like value, parseable
-or not, with a prefix (`--base-url=…`) or without a scheme (`user:pw@host`), and
+output. `credentialsIn(value)` finds the exact userinfo of a URL, parseable or not, and
 `redactCredentials(text, list)` replaces each `secret@` with `***@`; `redactUrl` falls
-back to them for a value that doesn't parse. `run()` starts with
-`withRedactedOutput(deps, argv)`, which collects the credentials of every argument (and
-of the value part of `--opt=value`, `redactionFor`) and redacts every line printed on
-stdout and every log record on stderr. The forms a server echoes a userinfo back in
-are replaced too: the `Basic` value and the decoded `user:password` on stdout and
-stderr, the password alone (4 characters or more) on stderr only, since it may well
-occur in the data. The log replaces them in each record's *message*,
-before the record is cut and escaped, and writes it to the raw stderr: the frame (time,
-level, topic) is never touched, and a password with DEL, C1 or bidi characters is
-matched in its raw form — commander's usage errors echo rejected values (`argument '…' is invalid`, `unknown
-command '…'`, `too many arguments … got 1: …`). `test/conformance-p1-cli-redaction.test.ts`
-checks ten passwords in seven URL shapes at nine argv positions.
+back to them for a value that doesn't parse. Only a value that starts with a scheme
+counts (a bare `a:b@c` is a file name, a party name or a User-Agent as often as a
+credential), except as the `--base-url` value, which is read as if it had one.
+`run()` starts with `withRedactedOutput(deps, argv)`, which collects the credentials of
+every argument (and of the value part of `--opt=value`, `redactionFor`) and redacts
+every line printed on stdout and every log record on stderr — commander's usage errors
+echo rejected values (`argument '…' is invalid`, `unknown command '…'`, `too many
+arguments … got 1: …`). The forms a server echoes a userinfo back in are replaced too:
+the `Basic` value and the decoded `user:password` on stdout and stderr, the password
+alone (4 characters or more) on stderr only, since it may well occur in the data. The
+log replaces them in each record's *message*, before the record is cut and escaped, and
+writes it to the raw stderr: the frame (time, level, topic) is never touched, and a
+password with DEL, C1 or bidi characters is matched in its raw form.
+`test/conformance-p1-cli-redaction.test.ts` checks ten passwords in seven URL shapes at
+nine argv positions (the schemeless shape as the `--base-url` value only).
 
 A plain-`http:` base URL gets a warning, not a refusal. `cleartextProblem(baseUrl,
 secrets)` (engine, exported) returns one sentence naming the host (`url.host`, never the

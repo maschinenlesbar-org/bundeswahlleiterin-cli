@@ -6,6 +6,7 @@ import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
+import { credentialsIn } from "../src/client/errors.js";
 
 /** Route each dataset request to its fixture by the file name in the URL. */
 function routeFixture(req: HttpRequest): HttpResponse {
@@ -418,4 +419,17 @@ test("a server echoing the Authorization header never puts the credentials into 
     assert.match(all, /denied for Basic \*\*\* decoded \*\*\*/, all);
     assert.ok(!all.includes(basic) && !all.includes("s3cretpw"), all);
   }
+});
+
+test("an a:b@c argument (a User-Agent, an -o path) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {
+  const csv = fx.partiesCsv.replace("Sozialdemokratische Partei Deutschlands", "run:2026-10-09@x");
+  const cli = makeCli(() => csvResponse(csv));
+  assert.equal(await run(["--user-agent", "run:2026-10-09@x", "parties"], cli.deps), 0);
+  assert.match(cli.out.join("\n"), /"run:2026-10-09@x"/);
+  const written = makeCli(() => csvResponse(csv));
+  assert.equal(await run(["-o", "run:2026-10-09@x.json", "parties"], written.deps), 0);
+  assert.match(untimed(written.err.join("\n")), /^INFO  \[bundeswahl\.output\] Wrote \d+ bytes to run:2026-10-09@x\.json$/);
+  assert.match(written.files["run:2026-10-09@x.json"]?.toString() ?? "", /"run:2026-10-09@x"/);
+  assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
+  assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
