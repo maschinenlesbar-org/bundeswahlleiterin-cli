@@ -96,7 +96,10 @@ or not, with a prefix (`--base-url=…`) or without a scheme (`user:pw@host`), a
 back to them for a value that doesn't parse. `run()` starts with
 `withRedactedOutput(deps, argv)`, which collects the credentials of every argument (and
 of the value part of `--opt=value`, `redactionFor`) and redacts every line printed on
-stdout and every log record on stderr. The log replaces them in each record's *message*,
+stdout and every log record on stderr. The forms a server echoes a userinfo back in
+are replaced too: the `Basic` value and the decoded `user:password` on stdout and
+stderr, the password alone (4 characters or more) on stderr only, since it may well
+occur in the data. The log replaces them in each record's *message*,
 before the record is cut and escaped, and writes it to the raw stderr: the frame (time,
 level, topic) is never touched, and a password with DEL, C1 or bidi characters is
 matched in its raw form — commander's usage errors echo rejected values (`argument '…' is invalid`, `unknown
@@ -114,9 +117,10 @@ never get there. `test/conformance-p20-cleartext-warning.test.ts` checks it.
 
 The library keeps them out of what a caller logs, too. The engine holds the base URL in
 a real `#private` field (so `console.log(client)`, `util.inspect` and `JSON.stringify`
-never show it) next to its userinfo, raw and percent-decoded, and scrubs that from
-error bodies (`BundeswahlApiError.body`/`detail`), transport error text and the `cause`
-chain. `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
+never show it) next to its userinfo, raw and percent-decoded, and the forms a server
+echoes it back in (the `Basic` value, the decoded `user:password`, the password alone
+from 4 characters: `echoedCredentialForms`), and scrubs them from error bodies
+(`BundeswahlApiError.body`/`detail`), transport error text and the `cause` chain. `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
 a custom transport throws (a string, fetch's `TypeError` naming the URL) reaches the
 caller as a `BundeswahlNetworkError` with the original, scrubbed, as its `cause`.
 `test/conformance-p2-library-redaction.test.ts` checks the client, nine failing

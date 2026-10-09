@@ -407,3 +407,15 @@ test("jsonl never prints a rejected base URL's password with DEL or C1 plus a sp
     assert.match(all, /http:\/\/\*\*\*@127\.0\.0\.1:99999\/ok/);
   }
 });
+
+test("a server echoing the Authorization header never puts the credentials into the record", async () => {
+  const basic = Buffer.from("alice:s3cretpw", "utf8").toString("base64");
+  for (const format of ["text", "jsonl"]) {
+    const cli = makeCli(() => rawResponse(`denied for Basic ${basic} decoded alice:s3cretpw`, "text/plain", 401));
+    const code = await run(["--log-format", format, "--base-url", "http://alice:s3cretpw@127.0.0.1:18431/echoauth", "parties"], cli.deps);
+    assert.equal(code, 1);
+    const all = cli.err.join("\n");
+    assert.match(all, /denied for Basic \*\*\* decoded \*\*\*/, all);
+    assert.ok(!all.includes(basic) && !all.includes("s3cretpw"), all);
+  }
+});
