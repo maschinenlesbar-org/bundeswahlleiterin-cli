@@ -96,6 +96,16 @@ im deutschen Format aus (`"128,0"`).
 Netzwerkfehler · `1` Sonstiges (auch eine Antwort, die kein CSV ist, etwa HTML). Siehe
 [Usage.md](Usage.md#exit-codes).
 
+**Log-Eintrag (log record).** Jede Diagnosezeile, die die CLI nach stderr schreibt: ein
+Zeitstempel, eine Stufe (`ERROR`, `WARN`, `INFO`) und ein Thema `bundeswahl.<Bereich>`, als
+Text (im Stil von log4j) oder mit `--log-format jsonl` als ein JSON-Objekt pro Zeile. Die
+Bereiche: `cli` (Bedienfehler, Meldungen von commander, unerwartete Fehler), `api` (die
+Antworten des Datenservers: ein Fehlerstatus und eine fehlerhafte Antwort — eine HTML-Seite
+statt der CSV-Datei, eine Datei ohne die erwartete Kopfzeile, abgeschnitten, komprimiert
+oder leer), `http` (die Verbindung, die Klartext-Warnung) und `output` (die `-o`-Datei,
+Schreibfehler auf stdout). Ein Eintrag ist immer eine Zeile; Steuerzeichen darin werden
+maskiert.
+
 **Filter wirken clientseitig.** Jeder Befehl lädt den gesamten Datensatz herunter und
 filtert im Speicher; Filter lassen sich daher kombinieren, und ein Filter ohne Treffer
 liefert `[]` (nicht alles).

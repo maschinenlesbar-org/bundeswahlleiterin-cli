@@ -394,9 +394,10 @@ controls as `\uXXXX`, so no text that reaches a record, by whatever path, can sp
 forge another one or steer the terminal. Before that a lone surrogate (half a
 character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`),
 and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
-code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
-file that does not parse as the expected CSV), `api` (the data host's answers, and the hint
-after a 3xx), `http` (the connection, the size-cap hint, the cleartext warning) and
+code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors), `api` (the
+data host's answers: an error status, the hint after a 3xx, and a malformed answer, a
+`BundeswahlParseError`: an HTML page instead of the CSV file, a file without the expected
+header, cut off, compressed, empty or in an unknown charset), `http` (the connection, the size-cap hint, the cleartext warning) and
 `output` (`Wrote N bytes` after `-o`, or any failure to write that file, the refusal to
 overwrite one included: an `OutputError`, and a stdout write error). Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander

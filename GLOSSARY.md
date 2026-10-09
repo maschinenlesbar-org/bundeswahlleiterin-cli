@@ -92,5 +92,14 @@ in `results`, counts/percentages reach you as JSON numbers, `null` for empty/`�
 failure · `1` other (incl. a non-CSV/HTML response). See
 [Usage.md](Usage.md#exit-codes).
 
+**Log record.** Every diagnostic line the CLI writes to stderr: a timestamp, a level
+(`ERROR`, `WARN`, `INFO`) and a topic `bundeswahl.<area>`, as text (log4j style) or with
+`--log-format jsonl` as one JSON object per line. The areas: `cli` (usage errors,
+commander's messages, unexpected errors), `api` (the data host's answers: an error
+status, and a malformed answer — an HTML page instead of the CSV file, a file without the
+expected header, cut off, compressed or empty), `http` (the connection, the cleartext
+warning) and `output` (the `-o` file, stdout failures). A record is always one line;
+control characters in it are escaped.
+
 **Filters are client-side.** Each command downloads the whole dataset and filters in
 memory, so filters compose and an unmatched filter returns `[]` (not everything).

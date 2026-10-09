@@ -10,6 +10,7 @@ import {
   BundeswahlApiError,
   BundeswahlError,
   BundeswahlNetworkError,
+  BundeswahlParseError,
   BundeswahlValidationError,
   credentialsIn,
   echoedCredentialForms,
@@ -200,6 +201,18 @@ export function processLogger(argv: readonly string[]): Logger {
   });
 }
 
+/**
+ * The log area of a `BundeswahlError` that is neither an API, network nor usage error: a
+ * malformed answer (`api`: an HTML page instead of the CSV file, a file without the
+ * expected header, cut off, compressed, empty or in an unknown charset — the host's
+ * answer as much as an error status is), the `-o` file (`output`), else `cli`.
+ */
+function areaOf(err: BundeswahlError): string {
+  if (err instanceof BundeswahlParseError) return "api";
+  if (err instanceof OutputError) return "output";
+  return "cli";
+}
+
 export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<number> {
   // The log replaces the secrets of the run in every message, in either format.
   deps = withRedactedOutput(deps, argv);
@@ -267,9 +280,9 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       return EXIT.NETWORK;
     }
     if (err instanceof BundeswahlError) {
-      // Includes BundeswahlParseError (e.g. an HTML page instead of a CSV file); an -o
-      // failure (OutputError) is an output record.
-      log.error(err instanceof OutputError ? "output" : "cli", err.message);
+      // A BundeswahlParseError (e.g. an HTML page instead of a CSV file) is an api
+      // record, an -o failure (OutputError) an output record.
+      log.error(areaOf(err), err.message);
       return EXIT.OTHER;
     }
     log.error("cli", `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);

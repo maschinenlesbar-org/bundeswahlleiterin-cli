@@ -104,7 +104,7 @@ test("an HTML page instead of CSV exits 1 with a helpful message", async () => {
   const cli = makeCli(() => rawResponse(fx.htmlShell, "text/html"));
   const code = await run(["results"], cli.deps);
   assert.equal(code, 1);
-  assert.match(cli.err.join("\n"), /HTML page/);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.api\] Expected a CSV file from .* but received an HTML page/);
 });
 
 test("--compact prints single-line JSON", async () => {
