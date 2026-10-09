@@ -157,7 +157,7 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `-h, --help` | Show help for the program or a command |
 | `--compact` | Print JSON on a single line instead of pretty-printed |
 | `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
-| `-o, --output <file>` | Write output to this file instead of stdout (`-` = stdout). Refuses to overwrite an existing file unless `--force` is given |
+| `-o, --output <file>` | Write output to this file instead of stdout (`-` = stdout). Refuses to overwrite an existing file unless `--force` is given; a directory is refused as one (`EISDIR`), with or without `--force` |
 | `-f, --force` | With `--output`, overwrite the target file if it already exists |
 | `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`). A `user:password@` in it is sent as Basic auth and shown as `***@` in every message; echoed back by a server (the `Basic` value, `user:password`, the password), it is shown as `***` |
 | `--timeout <ms>` | Time limit per request, reading the whole response included (default `30000`; `0` = none; at most `2147483647`). It bounds each attempt; the waits between retries come on top |

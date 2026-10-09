@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { handleOutputErrors } from "../src/cli/io.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { defaultIO, handleOutputErrors } from "../src/cli/io.js";
 import { createLogger } from "../src/cli/log.js";
 
 function streams() {
@@ -61,4 +64,23 @@ test("without a logger, a stdout write error is a text ERROR record on the strea
   assert.deepEqual(exits, [1]);
   assert.equal(written.length, 1);
   assert.match(written[0] ?? "", /^\S+Z ERROR \[bundeswahl\.output\] Could not write to stdout: write EBADF\n$/);
+});
+
+test("defaultIO.writeFile onto an existing directory fails with EISDIR, with or without --force, never EEXIST", () => {
+  const dir = mkdtempSync(join(tmpdir(), "bundeswahl-io-"));
+  try {
+    for (const exclusive of [true, false]) {
+      assert.throws(
+        () => defaultIO.writeFile(dir, Buffer.from("x"), exclusive),
+        (err: NodeJS.ErrnoException) => err.code === "EISDIR" && /^EISDIR: illegal operation on a directory/.test(err.message),
+        `exclusive: ${exclusive}`,
+      );
+    }
+    // An existing file is still EEXIST without --force (the "pass --force" refusal).
+    const file = join(dir, "x.json");
+    defaultIO.writeFile(file, Buffer.from("1"), true);
+    assert.throws(() => defaultIO.writeFile(file, Buffer.from("2"), true), (err: NodeJS.ErrnoException) => err.code === "EEXIST");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

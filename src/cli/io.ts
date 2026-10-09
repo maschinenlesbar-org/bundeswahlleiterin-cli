@@ -1,7 +1,7 @@
 // I/O seam for the CLI. Everything the CLI writes goes through a CliIO object so
 // tests can capture output instead of hitting the real stdout/stderr/filesystem.
 
-import { writeFileSync } from "node:fs";
+import { statSync, writeFileSync } from "node:fs";
 import type { BundeswahlClient, BundeswahlClientOptions } from "../client/client.js";
 import { createLogger, type Logger } from "./log.js";
 import { BundeswahlError } from "../client/errors.js";
@@ -92,5 +92,31 @@ export const defaultIO: CliIO = {
   // "wx" opens for exclusive write: it fails with EEXIST if the file already
   // exists, so an accidental --output never clobbers an existing file. Plain "w"
   // (the default) truncates, used only when the caller opted into --force.
-  writeFile: (path, data, exclusive) => writeFileSync(path, data, { flag: exclusive ? "wx" : "w" }),
+  writeFile: (path, data, exclusive) => {
+    try {
+      writeFileSync(path, data, { flag: exclusive ? "wx" : "w" });
+    } catch (err) {
+      // "wx" on a directory fails with EEXIST, which the CLI turns into "pass --force to
+      // overwrite"; --force then fails with EISDIR. Name the real problem the first time.
+      if ((err as NodeJS.ErrnoException).code === "EEXIST" && isDirectory(path)) throw directoryError(path, err);
+      throw err;
+    }
+  },
 };
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** The error a plain "w" write onto the directory `path` raises, for an exclusive write too. */
+function directoryError(path: string, cause: unknown): NodeJS.ErrnoException {
+  return Object.assign(new Error(`EISDIR: illegal operation on a directory, open '${path}'`, { cause }), {
+    code: "EISDIR",
+    syscall: "open",
+    path,
+  });
+}
