@@ -102,7 +102,7 @@ Text (im Stil von log4j) oder mit `--log-format jsonl` als ein JSON-Objekt pro Z
 Bereiche: `cli` (Bedienfehler, Meldungen von commander, unerwartete Fehler), `api` (die
 Antworten des Datenservers: ein Fehlerstatus und eine fehlerhafte Antwort — eine HTML-Seite
 statt der CSV-Datei, eine Datei ohne die erwartete Kopfzeile, abgeschnitten, komprimiert
-oder leer), `http` (die Verbindung, die Klartext-Warnung) und `output` (die `-o`-Datei,
+oder leer), `http` (die Verbindung, die Klartext-Warnung und je Wiederholung eine WARN-Zeile vor dem Warten) und `output` (die `-o`-Datei,
 Schreibfehler auf stdout). Ein Eintrag ist immer eine Zeile; Steuerzeichen darin werden
 maskiert.
 

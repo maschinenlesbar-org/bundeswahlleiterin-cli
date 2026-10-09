@@ -98,7 +98,7 @@ failure · `1` other (incl. a non-CSV/HTML response). See
 commander's messages, unexpected errors), `api` (the data host's answers: an error
 status, and a malformed answer — an HTML page instead of the CSV file, a file without the
 expected header, cut off, compressed or empty), `http` (the connection, the cleartext
-warning) and `output` (the `-o` file, stdout failures). A record is always one line;
+warning, and one WARN per retry before it waits) and `output` (the `-o` file, stdout failures). A record is always one line;
 control characters in it are escaped.
 
 **Filters are client-side.** Each command downloads the whole dataset and filters in

@@ -143,6 +143,12 @@ longer. **Retries never burst**: a `Retry-After` can make a wait longer, never s
 `retryAfterMs`. `test/conformance-p6-retry-policy.test.ts` checks both. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
 `UND_ERR_SOCKET`, anywhere in the `cause` chain) is retried like a 503, after
 `retryDelayMs * attempt`; a refused connection, a DNS failure and a timeout are not.
+Each retry is announced: the engine option `onRetry(event: RetryEvent)` (exported type:
+`{ retry` (1-based), `maxRetries`, `delayMs`, `status?` (absent for a reset), `url` (userinfo
+redacted) `}`) is called once per retry right before the sleep, never when there is none, and
+a throw in it is swallowed. The CLI's `action()` sets it to log one `WARN` record of
+`bundeswahl.http`, `HTTP 503 from <host>: retry 1 of 3 in 2 s` (`retryMessage`; host only, whole
+seconds, ms under 1 s). Tests: `test/retry-hook.test.ts`, `test/retry-log.test.ts`.
 
 **Custom transports.** `timeoutMs` and `maxResponseBytes` hold for every transport, not
 only the built-in one: the engine races the call against its own deadline and passes an

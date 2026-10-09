@@ -162,7 +162,7 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`). A `user:password@` in it is sent as Basic auth and shown as `***@` in every message; echoed back by a server (the `Basic` value, `user:password`, the password), it is shown as `***` |
 | `--timeout <ms>` | Time limit per request, reading the whole response included (default `30000`; `0` = none; at most `2147483647`). It bounds each attempt; the waits between retries come on top |
 | `--user-agent <ua>` | `User-Agent` header value |
-| `--max-retries <n>` | Retries for transient `429`/`503` responses and reset connections (0..10, default `2`); a refused connection, a DNS failure and a timeout are not retried. Each retry waits 200 ms × attempt, or the server's `Retry-After` (seconds or HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried, and the error names the requested wait |
+| `--max-retries <n>` | Retries for transient `429`/`503` responses and reset connections (0..10, default `2`); a refused connection, a DNS failure and a timeout are not retried. Each retry waits 200 ms × attempt, or the server's `Retry-After` (seconds or HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried, and the error names the requested wait. Each retry logs one WARN record of `bundeswahl.http` before it waits (`HTTP 503 from host: retry 1 of 3 in 2 s`). |
 | `--max-response-bytes <n>` | Cap response body size in bytes (`0` = unlimited; default 100 MiB) |
 
 A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
