@@ -22,6 +22,7 @@ import {
   BundeswahlValidationError,
   credentialsIn,
   cutForMessage,
+  cutText,
   describeValue,
   redactCredentials,
 } from "./errors.js";
@@ -680,7 +681,7 @@ export class RequestEngine {
     // reaches the user's terminal.
     const detail =
       trimmed && !/^<!doctype html|^<html/i.test(trimmed)
-        ? sanitizeServerText(trimmed.replace(/\s+/g, " ").slice(0, 200))
+        ? sanitizeServerText(cutText(trimmed.replace(/\s+/g, " "), 200))
         : undefined;
     return new BundeswahlApiError({ status, url, method: "GET", body: text, detail, retryAfterMs });
   }

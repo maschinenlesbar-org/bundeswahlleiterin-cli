@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, validateBaseUrl } from "../src/client/engine.js";
-import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, redactUrl } from "../src/client/errors.js";
+import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/client/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -356,4 +356,23 @@ test("a compressed body is reported as compressed, not as a character-set proble
     transport: async () => ({ status: 200, headers: { "content-encoding": "identity" }, body: Buffer.from("a;b\n") }),
   });
   assert.equal(await plain.getText("/p.csv"), "a;b\n");
+});
+
+test("cutText never cuts inside a surrogate pair; toWellFormed replaces half a character", () => {
+  assert.equal(cutText("ab\u{1f600}cd", 3), "ab");
+  assert.equal(cutText("ab\u{1f600}cd", 4), "ab\u{1f600}");
+  assert.equal(cutText("short", 10), "short");
+  assert.equal(toWellFormed("a\ud83d b\ude00 \u{1f600}"), "a� b� \u{1f600}");
+  // cutForMessage (500) uses it too.
+  assert.equal(toWellFormed(cutForMessage("a" + "\u{1f600}".repeat(400))), cutForMessage("a" + "\u{1f600}".repeat(400)));
+});
+
+test("a server detail cut at 200 characters keeps the message well-formed", async () => {
+  for (const detail of ["\u{1f600}".repeat(300), "a" + "\u{1f600}".repeat(300)]) {
+    const e = new RequestEngine({ maxRetries: 0, transport: async () => rawResponse(detail, "text/plain", 500) });
+    await assert.rejects(e.getText("/x"), (err: Error) => {
+      assert.equal(toWellFormed(err.message), err.message);
+      return true;
+    });
+  }
 });
