@@ -2,13 +2,16 @@
 // Bin shim: parse argv, run the CLI, and set the process exit code.
 
 import { handleOutputErrors } from "./io.js";
-import { run } from "./run.js";
+import { processLogger, run } from "./run.js";
 
+const argv = process.argv.slice(2);
+// What happens outside run() is logged too, in the format argv asks for.
+const log = processLogger(argv);
 // A closed pipe (`bundeswahl results | head`) is ordinary use: exit quietly instead of
 // an unhandled-EPIPE stack trace.
-handleOutputErrors();
+handleOutputErrors(process, undefined, log);
 
-run(process.argv.slice(2))
+run(argv)
   .then((code) => {
     process.exitCode = code;
   })
@@ -16,6 +19,6 @@ run(process.argv.slice(2))
     // run() constructs the program (buildProgram/configureTree) before its own
     // try/catch, so a synchronous throw there would otherwise become an unhandled
     // rejection. Fail secure: report it and exit non-zero rather than 0.
-    process.stderr.write(`Unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
+    log.error("cli", `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
   });

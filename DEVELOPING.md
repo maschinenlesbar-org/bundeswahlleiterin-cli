@@ -254,7 +254,9 @@ src/
 **Closed pipes.** The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`:
 an EPIPE on stdout (`| head`, a `jq` that exits early) exits 0 quietly — it used to print
 an unhandled-EPIPE stack trace and exit 1; an EPIPE on stderr is ignored, so a failed run
-keeps its own exit code; any other output error exits 1.
+keeps its own exit code; any other stdout write error is an ERROR record of
+`bundeswahl.output` (`Could not write to stdout: …`, in the format argv asks for:
+`processLogger`) and exits 1.
 `test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin for both.
 
 **Two seams make the whole thing testable in-process (no subprocesses):**
@@ -323,7 +325,8 @@ npm test          # builds, then runs `node --test` over dist/test
   `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
   one input through `run()` and through the library on one recording mock transport so a
   test can assert both give the same outcome.
-- **`io.test.ts`** — `handleOutputErrors()`: a reader that has gone (EPIPE, ENOTCONN).
+- **`io.test.ts`** — `handleOutputErrors()`: a reader that has gone (EPIPE, ENOTCONN),
+  and any other stdout write error as an ERROR record of `bundeswahl.output`.
 - **`conformance-p*.test.ts`** — the shared conformance tests of the 2026-10-05 fix plan,
   copied from the sibling repos with only their adapter block changed: P1 CLI redaction,
   P2 library redaction, P4/P19 base-URL validation (the P19 case is skipped: no environment
@@ -407,8 +410,9 @@ every failed run has an ERROR record (`writeCommanderErr`). The log is built wit
 run's redaction (`withRedactedOutput`), which replaces a secret in the message only, before it
 is escaped: the frame is never touched, and a secret is kept out of the log in either
 format. `CliDeps.now` makes the
-timestamps testable. stdout carries data only. Two lines are left raw, both written
-straight to `process.stderr` outside `run()`: the bin shim's `Output error: …`
-(`handleOutputErrors`, when stdout itself fails) and its last-resort `Unexpected error: …`
-when `run()` itself rejects. Conformance test P23 checks all of this, and its body is
+timestamps testable. stdout carries data only. What happens outside `run()`, in the bin
+shim, is logged too, through `processLogger(argv)` (the format argv asks for, the run's
+redaction): a stdout write error (`handleOutputErrors`) as an ERROR of `bundeswahl.output`,
+and the last-resort `Unexpected error: …` when `run()` itself rejects as an ERROR of
+`bundeswahl.cli`. Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.
