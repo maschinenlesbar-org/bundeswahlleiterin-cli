@@ -383,3 +383,16 @@ test("a line break, ESC or bidi control in a typed value never forges a record (
     }
   }
 });
+
+test("a dash-leading filter value is quoted once by the CLI's own message, cut at 500 characters", async () => {
+  const cli = makeCli();
+  const value = `-${"A".repeat(200_000)}`;
+  assert.equal(await run(["results", "--party", value], cli.deps), 2);
+  const record = cli.err[0] ?? "";
+  // commander's echo is cut by the record cap; the CLI's own note quotes the value cut.
+  assert.ok(record.length < 4200, `${record.length}`);
+  assert.ok(!record.includes("A".repeat(4001)), "one value whole in the record");
+  const own = makeCli();
+  assert.equal(await run(["results", "--party", `-${"B".repeat(1000)}`], own.deps), 2);
+  assert.match(own.err[0] ?? "", /looks like a missing value — "-B{498}… is the next option/);
+});

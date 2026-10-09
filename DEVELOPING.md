@@ -284,8 +284,10 @@ non-function `transport` or `sleep`, a `defaultHeaders` that isn't an object and
 non-object query all fail in the constructor or before any request. An echoed value (JSON-
 quoted, so `"2"` doesn't read like `2`) and server text in a message are cut at
 `MAX_MESSAGE_VALUE_LENGTH` (500) characters, a server's error text at 200, never inside a
-surrogate pair (`cutText`), so the message stays well-formed; the error's own properties
-keep the full value. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
+surrogate pair (`cutText`), so the message stays well-formed and bounded for a library
+caller too; the error's own properties keep the full value. The CLI's own parse-time
+message for a dash-leading filter value (`parseTextArg`) quotes it the same way
+(`describeValue`). `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
 charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
 `test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
@@ -378,8 +380,9 @@ the message (text) or the whole JSON object (jsonl), which writes CR and LF as `
 every other C0 control but TAB, DEL and C1 as `\u00XX`, and U+2028, U+2029 and the bidi
 controls as `\uXXXX`, so no text that reaches a record, by whatever path, can split it,
 forge another one or steer the terminal. Before that a lone surrogate (half a
-character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`).
-The areas are `cli` (usage errors, commander's messages, unexpected errors, a
+character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`),
+and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
+code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
 file that does not parse as the expected CSV), `api` (the data host's answers, and the hint
 after a 3xx), `http` (the connection, the size-cap hint, the cleartext warning) and
 `output` (`Wrote N bytes` after `-o`). Code logs through `logOf(deps)` and never writes

@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { logOf, type CliDeps } from "./io.js";
 import type { BundeswahlClientOptions } from "../client/client.js";
-import { BundeswahlError } from "../client/errors.js";
+import { BundeswahlError, describeValue } from "../client/errors.js";
 import { cleartextProblem, DEFAULT_BASE_URL } from "../client/engine.js";
 import { baseUrlProblem, headerValueProblem } from "../client/validate.js";
 
@@ -74,6 +74,9 @@ export function once<T>(parse: (value: string) => T): (value: string, previous: 
  * parser the same string for `--party -x` and `--party=-x`, so the two cannot be
  * told apart here — and no Land, Wahlkreis, party or Gruppenart in this dataset
  * begins with a dash, so nothing legitimate is lost.
+ *
+ * The message quotes the value as the library does (`describeValue`: JSON-quoted, cut at
+ * `MAX_MESSAGE_VALUE_LENGTH`), so a huge value can't make the record huge twice.
  */
 export function parseTextArg(value: string): string {
   if (value.trim() === "") {
@@ -81,7 +84,7 @@ export function parseTextArg(value: string): string {
   }
   if (/^--?[^\s]/.test(value)) {
     throw new InvalidArgumentError(
-      `looks like a missing value — "${value}" is the next option, consumed because ` +
+      `looks like a missing value — ${describeValue(value)} is the next option, consumed because ` +
         "this one was left without a value. No name or number in this dataset starts " +
         "with a dash; supply the intended value.",
     );
