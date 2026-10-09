@@ -6,7 +6,7 @@ import * as lib from "../src/index.js";
 import { run } from "../src/cli/run.js";
 import { defaultDeps } from "../src/cli/program.js";
 import type { CliDeps } from "../src/cli/io.js";
-import { csvResponse, parity, requestShapes } from "./helpers.js";
+import { csvResponse, parity, requestShapes, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 const evenProblem: Problem<number> = (n) => (n % 2 === 0 ? undefined : "Expected an even number.");
@@ -37,7 +37,7 @@ test("the package root exports assertValid and BundeswahlValidationError", () =>
   assert.equal(lib.BundeswahlValidationError, BundeswahlValidationError);
 });
 
-test("run() maps a BundeswahlValidationError raised during an action to exit 2, 'Error: <message>'", async () => {
+test("run() maps a BundeswahlValidationError raised during an action to exit 2 and an ERROR record", async () => {
   const err: string[] = [];
   const deps: CliDeps = {
     ...defaultDeps,
@@ -47,7 +47,7 @@ test("run() maps a BundeswahlValidationError raised during an action to exit 2, 
     },
   };
   assert.equal(await run(["parties"], deps), 2);
-  assert.deepEqual(err, ["Error: Invalid thing: Expected something else."]);
+  assert.deepEqual(err.map(untimed), ["ERROR [bundeswahl.cli] Invalid thing: Expected something else."]);
 });
 
 test("parity(): an input both sides reject sends no request on either side", async () => {

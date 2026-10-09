@@ -87,6 +87,21 @@ Every command prints **JSON to stdout**; diagnostics go to stderr, so piping int
 `jq` stays clean. Counts (`anzahl`) are integers and shares (`prozent`) are numbers;
 empty/placeholder cells are `null`.
 
+Each line on stderr is a **log record**: a timestamp (UTC), a level (`ERROR`, `WARN`,
+`INFO`) and a topic, the program and the area it comes from (`bundeswahl.cli` for usage
+errors, `bundeswahl.api` for the data host's answers, `bundeswahl.http` for the connection,
+`bundeswahl.output` for `-o`). By default it is written log4j style; `--log-format jsonl`
+writes one JSON object per line instead:
+
+```text
+2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] requests to mirror.example are sent unencrypted (http:, not https:)
+2026-10-09T14:03:12.902Z ERROR [bundeswahl.api] HTTP 404 for GET http://mirror.example/dam/jcr/925d6e98-3616-465a-835a-cec1ea73abc2/btw25_parteien.csv
+```
+
+```bash
+bundeswahl --log-format jsonl parties 2>log.jsonl   # {"ts":"…","level":"ERROR","topic":"bundeswahl.api","msg":"HTTP 404 …"}
+```
+
 ```bash
 # Second-vote national shares, sorted
 bundeswahl results --area-type Bund --vote 2 --group-type Partei \
@@ -137,6 +152,7 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `-V, --version` | Print the version number |
 | `-h, --help` | Show help for the program or a command |
 | `--compact` | Print JSON on a single line instead of pretty-printed |
+| `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
 | `-o, --output <file>` | Write output to this file instead of stdout (`-` = stdout). Refuses to overwrite an existing file unless `--force` is given |
 | `-f, --force` | With `--output`, overwrite the target file if it already exists |
 | `--base-url <url>` | Data host base URL (default `https://www.bundeswahlleiterin.de`; `http:`/`https:` only, no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`). A `user:password@` in it is sent as Basic auth and shown as `***@` in every message |
@@ -146,9 +162,9 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `--max-response-bytes <n>` | Cap response body size in bytes (`0` = unlimited; default 100 MiB) |
 
 A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
-`::1`) works, but the CLI writes one line to stderr before the first request, e.g.
-`warning: requests to mirror.example are sent unencrypted (http:, not https:)`, or
-`warning: the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)`
+`::1`) works, but the CLI writes one `WARN` record of `bundeswahl.http` to stderr before the
+first request, e.g. `… WARN  [bundeswahl.http] requests to mirror.example are sent unencrypted (http:, not https:)`,
+or `… WARN  [bundeswahl.http] the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)`
 when it carries a `user:password@` (never printed). stdout, `-o` files and the exit code
 are unchanged.
 

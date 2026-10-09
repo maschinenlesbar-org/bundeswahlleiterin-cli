@@ -3,6 +3,7 @@
 
 import { writeFileSync } from "node:fs";
 import type { BundeswahlClient, BundeswahlClientOptions } from "../client/client.js";
+import { createLogger, type Logger } from "./log.js";
 
 export interface CliIO {
   out(text: string): void;
@@ -19,6 +20,18 @@ export interface CliDeps {
   io: CliIO;
   /** Build a client from the resolved global options (injectable for tests). */
   createClient(options: BundeswahlClientOptions): BundeswahlClient;
+  /**
+   * Where diagnostics go: one record per line on stderr, in the `--log-format`
+   * (`log.ts`). `run()` sets it from argv; deps without it log text through `io.err`.
+   */
+  log?: Logger;
+  /** The clock the log's timestamps come from. Unset, the real one. */
+  now?: () => Date;
+}
+
+/** The deps' logger, or one that writes text records through `io.err`. */
+export function logOf(deps: CliDeps): Logger {
+  return deps.log ?? createLogger({ format: "text", write: (line) => deps.io.err(line), ...(deps.now === undefined ? {} : { now: deps.now }) });
 }
 
 export interface OutputStreams {

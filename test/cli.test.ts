@@ -4,7 +4,7 @@ import { run } from "../src/cli/run.js";
 import { BundeswahlClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
+import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 /** Route each dataset request to its fixture by the file name in the URL. */
@@ -137,7 +137,7 @@ test("--output writes to a file and keeps stdout clean", async () => {
   await run(["--output", "/tmp/br_out.json", "parties"], cli.deps);
   assert.equal(cli.out.length, 0);
   assert.ok(cli.files["/tmp/br_out.json"]);
-  assert.match(cli.err.join("\n"), /Wrote \d+ bytes/);
+  assert.match(untimed(cli.err.join("\n")), /^INFO  \[bundeswahl\.output\] Wrote \d+ bytes to \/tmp\/br_out\.json$/);
 });
 
 test("--output refuses to overwrite an existing file (exit 1), unless --force", async () => {

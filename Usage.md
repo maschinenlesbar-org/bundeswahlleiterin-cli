@@ -19,14 +19,15 @@ bundeswahl [global options] <command> [command options]
 | `--max-retries <n>` | retries for transient 429/503 responses and reset connections (0..10; each waits 200 ms × attempt, or a 429/503's `Retry-After` when that is longer, up to 30 s — a longer one is not retried and the error names the requested wait; refused connections, DNS failures and timeouts are not retried) |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
+| `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
 | `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout) |
 | `-f, --force` | with `--output`, overwrite the file if it already exists (without it, an existing file is never overwritten) |
 | `-V, --version` / `-h, --help` | version / help |
 
 A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
-`::1`) works, but the CLI writes one line to stderr before the first request, e.g.
-`warning: requests to mirror.example are sent unencrypted (http:, not https:)`, or
-`warning: the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)`
+`::1`) works, but the CLI writes one `WARN` record of `bundeswahl.http` to stderr before the
+first request, e.g. `… WARN  [bundeswahl.http] requests to mirror.example are sent unencrypted (http:, not https:)`,
+or `… WARN  [bundeswahl.http] the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)`
 when it carries a `user:password@` (never printed). stdout, `-o` files and the exit code
 are unchanged.
 
