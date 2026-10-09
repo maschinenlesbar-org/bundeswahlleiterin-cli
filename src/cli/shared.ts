@@ -3,9 +3,9 @@
 
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { logOf, type CliDeps } from "./io.js";
+import { OutputError, logOf, type CliDeps } from "./io.js";
 import type { BundeswahlClientOptions } from "../client/client.js";
-import { BundeswahlError, describeValue } from "../client/errors.js";
+import { describeValue } from "../client/errors.js";
 import { cleartextProblem, DEFAULT_BASE_URL } from "../client/engine.js";
 import { baseUrlProblem, headerValueProblem } from "../client/validate.js";
 
@@ -184,16 +184,18 @@ export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown)
       deps.io.writeFile(global.output, data, !global.force);
     } catch (err) {
       if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EEXIST") {
-        throw new BundeswahlError(
+        throw new OutputError(
           `Refusing to overwrite existing file ${global.output} — pass --force to overwrite.`,
+          { cause: err },
         );
       }
       // A bad --output path (missing directory, a directory, no permission) is a
-      // user error, not an internal fault — surface it as a clean BundeswahlError
-      // instead of letting the raw fs exception hit the "Unexpected error" path.
-      // Drop the `, open '<path>'` tail since we already name the path ourselves.
+      // user error, not an internal fault — surface it as a clean OutputError (logged
+      // under bundeswahl.output) instead of letting the raw fs exception hit the
+      // "Unexpected error" path. Drop the `, open '<path>'` tail since we already name
+      // the path ourselves.
       const reason = err instanceof Error ? err.message.replace(/,\s*open\s+'.*'$/, "") : String(err);
-      throw new BundeswahlError(`Could not write to ${global.output}: ${reason}`);
+      throw new OutputError(`Could not write to ${global.output}: ${reason}`, { cause: err });
     }
     logOf(deps).info("output", `Wrote ${data.length} bytes to ${global.output}`);
   } else {

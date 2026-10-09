@@ -397,7 +397,8 @@ and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cu
 code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors, a
 file that does not parse as the expected CSV), `api` (the data host's answers, and the hint
 after a 3xx), `http` (the connection, the size-cap hint, the cleartext warning) and
-`output` (`Wrote N bytes` after `-o`). Code logs through `logOf(deps)` and never writes
+`output` (`Wrote N bytes` after `-o`, or any failure to write that file, the refusal to
+overwrite one included: an `OutputError`, and a stdout write error). Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
 parses it (`logFormatFromArgv`, which skips the value of every option that takes one, as
 commander does, and is used only for the records of a parse error; a `preAction` hook

@@ -4,6 +4,14 @@
 import { writeFileSync } from "node:fs";
 import type { BundeswahlClient, BundeswahlClientOptions } from "../client/client.js";
 import { createLogger, type Logger } from "./log.js";
+import { BundeswahlError } from "../client/errors.js";
+
+/**
+ * Writing the output to the `-o` file failed (a missing directory, a directory,
+ * EACCES, an existing file without `--force`, …). Logged as an ERROR of
+ * `bundeswahl.output`, exit 1.
+ */
+export class OutputError extends BundeswahlError {}
 
 export interface CliIO {
   out(text: string): void;

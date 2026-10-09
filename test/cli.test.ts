@@ -152,7 +152,7 @@ test("--output refuses to overwrite an existing file (exit 1), unless --force", 
   // the existing bytes are left untouched.
   const code = await run(["--output", "/tmp/br_dup.json", "wahlkreise"], cli.deps);
   assert.equal(code, 1);
-  assert.match(cli.err.join("\n"), /Refusing to overwrite/);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Refusing to overwrite/m);
   assert.equal(cli.files["/tmp/br_dup.json"], original);
 
   // With --force the overwrite goes through.
@@ -162,10 +162,11 @@ test("--output refuses to overwrite an existing file (exit 1), unless --force", 
 
 test("a --output write failure reports a clean error (exit 1)", async () => {
   const mt = makeMockTransport(routeFixture);
+  const err: string[] = [];
   const deps: CliDeps = {
     io: {
       out: () => {},
-      err: () => {},
+      err: (s) => err.push(s),
       writeFile: () => {
         throw new Error("EISDIR: illegal operation on a directory, open '/tmp'");
       },
@@ -174,6 +175,8 @@ test("a --output write failure reports a clean error (exit 1)", async () => {
   };
   const code = await run(["--output", "/tmp", "parties"], deps);
   assert.equal(code, 1);
+  assert.match(untimed(err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/tmp: EISDIR/);
+  assert.doesNotMatch(err.join("\n"), /Unexpected error/);
 });
 
 test("a control character in --user-agent is rejected (exit 2), no request", async () => {
@@ -486,4 +489,16 @@ test("the log format is the one commander parsed, where an option's value looks 
   const parse = makeCli();
   assert.equal(await run(["--user-agent", "--log-format", "jsonl", "parties"], parse.deps), 2);
   assert.ok(parse.err.length > 0 && !parse.err.some(isJsonl), parse.err.join("\n"));
+});
+
+test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", async () => {
+  for (const thrown of [new Error("ENOENT: no such file or directory, open '/nonexistent/x'"), new Error("EACCES: permission denied, open '/nonexistent/x'"), "not an Error"]) {
+    const cli = makeCli();
+    cli.deps.io.writeFile = () => {
+      throw thrown;
+    };
+    assert.equal(await run(["-o", "/nonexistent/x", "parties"], cli.deps), 1);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent\/x: /);
+    assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
+  }
 });
