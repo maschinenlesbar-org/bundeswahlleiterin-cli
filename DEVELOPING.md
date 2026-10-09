@@ -326,8 +326,10 @@ npm test          # builds, then runs `node --test` over dist/test
   `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
   one input through `run()` and through the library on one recording mock transport so a
   test can assert both give the same outcome.
-- **`io.test.ts`** — `handleOutputErrors()`: a reader that has gone (EPIPE, ENOTCONN),
-  and any other stdout write error as an ERROR record of `bundeswahl.output`.
+- **`io.test.ts`** — `handleOutputErrors()` and `stderrAfterStdout` with fake streams: a
+  reader that has gone (EPIPE, ENOTCONN), any other stdout write error as an ERROR record
+  of `bundeswahl.output`, a record held behind stdout's backlog; and `defaultIO.writeFile`
+  onto a directory.
 - **`conformance-p*.test.ts`** — the shared conformance tests of the 2026-10-05 fix plan,
   copied from the sibling repos with only their adapter block changed: P1 CLI redaction,
   P2 library redaction, P4/P19 base-URL validation (the P19 case is skipped: no environment
@@ -419,5 +421,8 @@ redaction): a stdout write error (`handleOutputErrors`) as an ERROR of `bundeswa
 the last-resort `Unexpected error: …` when `run()` itself rejects as an ERROR of
 `bundeswahl.cli`, and Node's own process warnings (`NODE_TLS_REJECT_UNAUTHORIZED=0`) as
 WARN records of `bundeswahl.cli`: the shim installs `installWarningLog`, which removes
-Node's default `warning` listener and logs `(node) <name>: <message>`. Conformance test P23 checks all of this, and its body is
+Node's default `warning` listener and logs `(node) <name>: <message>`. In `defaultDeps`
+a record waits for stdout (`stderrAfterStdout`): it is held while stdout has a backlog and
+written, in order, once it is gone, so with `2>&1 |` and a slow reader it never lands
+inside the data. Conformance test P23 checks all of this, and its body is
 shared across the *-cli repos.
