@@ -95,8 +95,11 @@ or not, with a prefix (`--base-url=…`) or without a scheme (`user:pw@host`), a
 `redactCredentials(text, list)` replaces each `secret@` with `***@`; `redactUrl` falls
 back to them for a value that doesn't parse. `run()` starts with
 `withRedactedOutput(deps, argv)`, which collects the credentials of every argument (and
-of the value part of `--opt=value`) and redacts every line printed on stdout and stderr
-— commander's usage errors echo rejected values (`argument '…' is invalid`, `unknown
+of the value part of `--opt=value`, `redactionFor`) and redacts every line printed on
+stdout and every log record on stderr. The log replaces them in each record's *message*,
+before the record is cut and escaped, and writes it to the raw stderr: the frame (time,
+level, topic) is never touched, and a password with DEL, C1 or bidi characters is
+matched in its raw form — commander's usage errors echo rejected values (`argument '…' is invalid`, `unknown
 command '…'`, `too many arguments … got 1: …`). `test/conformance-p1-cli-redaction.test.ts`
 checks ten passwords in seven URL shapes at nine argv positions.
 
@@ -387,8 +390,10 @@ file that does not parse as the expected CSV), `api` (the data host's answers, a
 after a 3xx), `http` (the connection, the size-cap hint, the cleartext warning) and
 `output` (`Wrote N bytes` after `-o`). Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
-parses it, so commander's own usage errors are records too, and on top of the redacted
-`io.err`, so a secret is kept out of the log in either format. `CliDeps.now` makes the
+parses it, so commander's own usage errors are records too, and with the run's
+redaction (`withRedactedOutput`), which replaces a secret in the message only, before it
+is escaped: the frame is never touched, and a secret is kept out of the log in either
+format. `CliDeps.now` makes the
 timestamps testable. stdout carries data only. Two lines are left raw, both written
 straight to `process.stderr` outside `run()`: the bin shim's `Output error: …`
 (`handleOutputErrors`, when stdout itself fails) and its last-resort `Unexpected error: …`

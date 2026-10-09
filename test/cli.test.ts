@@ -396,3 +396,14 @@ test("a dash-leading filter value is quoted once by the CLI's own message, cut a
   assert.equal(await run(["results", "--party", `-${"B".repeat(1000)}`], own.deps), 2);
   assert.match(own.err[0] ?? "", /looks like a missing value — "-B{498}… is the next option/);
 });
+
+test("jsonl never prints a rejected base URL's password with DEL or C1 plus a space", async () => {
+  for (const password of ["p\u007fq r", "p\u0085q r"]) {
+    const cli = makeCli();
+    const code = await run(["--log-format", "jsonl", "--base-url", `http://bob:${password}@127.0.0.1:99999/ok`, "parties"], cli.deps);
+    assert.equal(code, 2);
+    const all = cli.err.join("\n");
+    assert.ok(!all.includes("q r") && !all.includes("bob:p"), all);
+    assert.match(all, /http:\/\/\*\*\*@127\.0\.0\.1:99999\/ok/);
+  }
+});
