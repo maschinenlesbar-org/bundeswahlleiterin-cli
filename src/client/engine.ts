@@ -374,7 +374,8 @@ function isLoopbackHost(hostname: string): boolean {
  * The sentence names the host (`url.host`: host and port, never the userinfo) and what
  * secret travels with the requests: the base URL's credentials when it carries userinfo,
  * and every phrase in `secrets` (noun phrases such as "the API key"). It never contains
- * a password or key. The CLI prints it once per run as `warning: <sentence>` on stderr.
+ * a password or key. The CLI logs it as a `WARN` record of `bundeswahl.http` on
+ * stderr (once per run, before the first request).
  */
 export function cleartextProblem(baseUrl: string, secrets: readonly string[] = []): string | undefined {
   let url: URL;
