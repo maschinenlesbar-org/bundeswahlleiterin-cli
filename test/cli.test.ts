@@ -463,3 +463,27 @@ test("commander's output is one record per line, and a run without a command has
   assert.notEqual(await run(["help", "nosuch"], help.deps), 0);
   assert.match(untimed(help.err[0] ?? ""), /^ERROR \[bundeswahl\.cli\] /);
 });
+
+test("the log format is the one commander parsed, where an option's value looks like --log-format (L6)", async () => {
+  const isJsonl = (line: string): boolean => line.startsWith("{");
+  const notFound = () => csvResponse("nope", 404);
+  // commander takes "--log-format=jsonl" as the User-Agent: the record is text.
+  const ua = makeCli(notFound);
+  assert.equal(await run(["--user-agent", "--log-format=jsonl", "parties"], ua.deps), 4);
+  assert.ok(ua.err.length === 1 && !isJsonl(ua.err[0] as string), ua.err.join("\n"));
+  // commander takes "--" as the User-Agent, then parses --log-format jsonl: jsonl.
+  const dashes = makeCli(notFound);
+  assert.equal(await run(["--user-agent", "--", "--log-format", "jsonl", "parties"], dashes.deps), 4);
+  assert.ok(dashes.err.length === 1 && isJsonl(dashes.err[0] as string), dashes.err.join("\n"));
+  // jsonl asked for, then "--log-format" as the value of --user-agent and of -o: jsonl.
+  const back = makeCli(notFound);
+  assert.equal(await run(["--log-format", "jsonl", "--user-agent", "--log-format", "parties"], back.deps), 4);
+  assert.ok(back.err.length === 1 && isJsonl(back.err[0] as string), back.err.join("\n"));
+  const output = makeCli();
+  assert.equal(await run(["--log-format", "jsonl", "-o", "--log-format", "parties"], output.deps), 0);
+  assert.ok(output.err.length === 1 && isJsonl(output.err[0] as string), output.err.join("\n"));
+  // A parse error after such a value is logged in the format commander would have used.
+  const parse = makeCli();
+  assert.equal(await run(["--user-agent", "--log-format", "jsonl", "parties"], parse.deps), 2);
+  assert.ok(parse.err.length > 0 && !parse.err.some(isJsonl), parse.err.join("\n"));
+});
