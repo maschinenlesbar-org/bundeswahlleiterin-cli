@@ -433,3 +433,33 @@ test("an a:b@c argument (a User-Agent, an -o path) is neither a credential in th
   assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
   assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
+
+test("commander's output is one record per line, and a run without a command has an ERROR (L5)", async () => {
+  // Options but no command: commander shows the help as an error.
+  for (const argv of [["--compact"], ["--log-format", "jsonl"]]) {
+    const none = makeCli();
+    assert.equal(await run(argv, none.deps), 2);
+    const lines = none.err.map((line) => (argv[0] === "--log-format" ? (JSON.parse(line) as { level: string; msg: string }) : null));
+    if (argv[0] === "--log-format") {
+      assert.deepEqual([lines[0]?.level, lines[0]?.msg], ["ERROR", "missing command: `bundeswahl <subcommand>`"]);
+      assert.ok(lines.slice(1).every((r) => r?.level === "INFO" && !r.msg.includes("\n")), none.err.join("\n"));
+      continue;
+    }
+    const text = none.err.map(untimed);
+    assert.equal(text[0], "ERROR [bundeswahl.cli] missing command: `bundeswahl <subcommand>`");
+    assert.ok(text.slice(1).every((line) => line.startsWith("INFO  [bundeswahl.cli] ") && !line.includes("\\n")), text.join("\n"));
+    assert.ok(text.some((line) => line === "INFO  [bundeswahl.cli] Usage: bundeswahl [options] [command]"), text.join("\n"));
+  }
+
+  // A command typo: the suggestion is part of the ERROR, the help one INFO record per line.
+  const typo = makeCli();
+  assert.equal(await run(["partys"], typo.deps), 2);
+  const typoLines = typo.err.map(untimed);
+  assert.equal(typoLines[0], "ERROR [bundeswahl.cli] unknown command 'partys' (Did you mean parties?)");
+  assert.ok(typoLines.slice(1).every((line) => line.startsWith("INFO  [bundeswahl.cli] ") && !line.includes("\\n")), typoLines.join("\n"));
+
+  // An unknown help topic is an ERROR too.
+  const help = makeCli();
+  assert.notEqual(await run(["help", "nosuch"], help.deps), 0);
+  assert.match(untimed(help.err[0] ?? ""), /^ERROR \[bundeswahl\.cli\] /);
+});
