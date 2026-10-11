@@ -33,14 +33,14 @@ completed election, so they are **pinned** in `client.ts` (`BTW2025`).
 
 ```bash
 npm install
-npm run build        # compiles TypeScript to dist/
+npm run build        # compiles every workspace (tsc -b) to its dist/
 ```
 
 Run the locally built CLI without a global install:
 
 ```bash
-node dist/src/cli/index.js --help
-# or, after `npm link`:
+node apps/cli/dist/src/cli/index.js --help    # or: npm start -- --help
+# or, after `npm link --workspace apps/cli`:
 bundeswahl --help
 ```
 
@@ -105,7 +105,7 @@ alone (4 characters or more) on stderr only, since it may well occur in the data
 log replaces them in each record's *message*, before the record is cut and escaped, and
 writes it to the raw stderr: the frame (time, level, topic) is never touched, and a
 password with DEL, C1 or bidi characters is matched in its raw form.
-`test/conformance-p1-cli-redaction.test.ts` checks ten passwords in seven URL shapes at
+`apps/cli/test/conformance-p1-cli-redaction.test.ts` checks ten passwords in seven URL shapes at
 nine argv positions (the schemeless shape as the `--base-url` value only).
 
 A plain-`http:` base URL gets a warning, not a refusal. `cleartextProblem(baseUrl,
@@ -115,7 +115,7 @@ userinfo — or `undefined` for `https:`, an unparseable URL and loopback hosts
 (`localhost`, `127.0.0.0/8`, `::1`). The CLI's `action()` wrapper (`shared.ts`,
 `warnOnCleartext`) logs it once per run as a `WARN` record of `bundeswahl.http` on stderr, after the
 options are parsed and before the first request; `--help`, `--version` and usage errors
-never get there. `test/conformance-p20-cleartext-warning.test.ts` checks it.
+never get there. `apps/cli/test/conformance-p20-cleartext-warning.test.ts` checks it.
 
 The library keeps them out of what a caller logs, too. The engine holds the base URL in
 a real `#private` field (so `console.log(client)`, `util.inspect` and `JSON.stringify`
@@ -125,7 +125,7 @@ from 4 characters: `echoedCredentialForms`), and scrubs them from error bodies
 (`BundeswahlApiError.body`/`detail`), transport error text and the `cause` chain. `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
 a custom transport throws (a string, fetch's `TypeError` naming the URL) reaches the
 caller as a `BundeswahlNetworkError` with the original, scrubbed, as its `cause`.
-`test/conformance-p2-library-redaction.test.ts` checks the client, nine failing
+`apps/cli/test/conformance-p2-library-redaction.test.ts` checks the client, nine failing
 transports and five rejected base URLs.
 
 `userAgent` and every `defaultHeaders` value are checked in the constructor with
@@ -140,7 +140,7 @@ longer. **Retries never burst**: a `Retry-After` can make a wait longer, never s
 `Retry-After: 0` or a date in the past no longer sends the retries back to back. A
 `Retry-After` longer than `MAX_RETRY_AFTER_MS` (30 s) is not retried: the
 `BundeswahlApiError` surfaces at once, says so, names the requested wait and carries it as
-`retryAfterMs`. `test/conformance-p6-retry-policy.test.ts` checks both. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
+`retryAfterMs`. `apps/cli/test/conformance-p6-retry-policy.test.ts` checks both. A reset connection (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's
 `UND_ERR_SOCKET`, anywhere in the `cause` chain) is retried like a 503, after
 `retryDelayMs * attempt`; a refused connection, a DNS failure and a timeout are not.
 Each retry is announced: the engine option `onRetry(event: RetryEvent)` (exported type:
@@ -148,7 +148,7 @@ Each retry is announced: the engine option `onRetry(event: RetryEvent)` (exporte
 redacted) `}`) is called once per retry right before the sleep, never when there is none, and
 a throw in it is swallowed. The CLI's `action()` sets it to log one `WARN` record of
 `bundeswahl.http`, `HTTP 503 from <host>: retry 1 of 3 in 2 s` (`retryMessage`; host only, whole
-seconds, ms under 1 s). Tests: `test/retry-hook.test.ts`, `test/retry-log.test.ts`.
+seconds, ms under 1 s). Tests: `packages/client/test/retry-hook.test.ts`, `apps/cli/test/retry-log.test.ts`.
 
 **Custom transports.** `timeoutMs` and `maxResponseBytes` hold for every transport, not
 only the built-in one: the engine races the call against its own deadline and passes an
@@ -158,7 +158,7 @@ object, a `Map` or a record with names in any case (`Retry-After` is read from a
 them), and its body as a `Buffer`, any ArrayBuffer view (fetch's `Uint8Array`) or an
 `ArrayBuffer`, from any realm. Whatever a transport throws or returns that isn't a
 response (a string body, no status) becomes a `BundeswahlNetworkError`.
-`test/conformance-p5-transport-contract.test.ts` checks this with a never-answering
+`apps/cli/test/conformance-p5-transport-contract.test.ts` checks this with a never-answering
 transport, `fetch` against a silent server, a 2 MiB body and every body and header shape.
 
 ### Methods (one per dataset)
@@ -184,7 +184,7 @@ a `BundeswahlParseError` that says so, rather than a misleading charset diagnosi
 
 ## The CSV parser
 
-[`csv.ts`](src/client/csv.ts) is a small, dependency-free parser:
+[`csv.ts`](packages/client/src/csv.ts) is a small, dependency-free parser:
 
 - **`parseCsvRows(text, delimiter=';')`** — an RFC-4180-ish tokenizer: it strips the
   UTF-8 BOM and understands double-quoted fields, `""` escapes, and delimiters/
@@ -232,13 +232,50 @@ so it is a `BundeswahlParseError` instead of partial data or `[]` with exit 0:
   Wahlkreise 1–299 (`BTW2025_WAHLKREISE`), each once.
 - `structure`: the file ends with the national "Insgesamt" row (`Wahlkreis-Nr.` 999).
 
-The test fixtures are complete in this sense (`test/fixtures.ts`).
+The test fixtures are complete in this sense (`packages/client/test/fixtures.ts`).
 
 ## Architecture
 
+The repository is an **npm workspace** with two folders: `apps/` holds the programs it
+publishes, `packages/` the libraries they are built from.
+
 ```
-src/
-  client/
+package.json         # private workspace manifest: no version, never packed
+apps/cli/            # @maschinenlesbar.org/bundeswahlleiterin-cli — the published package
+  package.json       # its version, bin, files, bundleDependencies
+  src/index.ts       # library entry: re-exports @maschinenlesbar.org/bundeswahlleiterin-client
+  src/cli/           # the CLI (below)
+  test/              # CLI tests and every conformance-*.test.ts
+packages/client/     # @maschinenlesbar.org/bundeswahlleiterin-client — private, bundled into the CLI
+  src/               # the API client (below)
+  test/              # tests that only touch the client, + the transport helpers and fixtures
+tools/pack/          # prepack/postpack: bundle the client and commander into the tarball
+tools/bump.mjs       # version bump + commit + tag (npm run bump)
+tsconfig.docs.json   # TypeDoc only: the package entry, with the client read from its sources
+```
+
+- **The client is its own package** so a later MCP app can share it with the CLI. It is
+  never published on its own: `apps/cli`'s `prepack` copies it (and commander) into the
+  app's `node_modules`, and `bundleDependencies` ships it inside the tarball. The library
+  entry re-exports the client's `"."`, so `import { BundeswahlClient } from
+  "@maschinenlesbar.org/bundeswahlleiterin-cli"` is unchanged.
+- **The client's exports:** `"."` is the public library surface (`src/index.ts`);
+  `"./internal/*"` maps to any module (`…/bundeswahlleiterin-client/internal/engine`) for
+  what the CLI needs beyond that; `"./test/*"` reaches the client's test helpers and
+  fixtures from the CLI's tests (not bundled). Only `"."` is part of the library.
+- **Dependencies point one way:** the app depends on the client, the client on nothing
+  in the workspace.
+- **The version lives in `apps/cli/package.json`.** The root has none; a plain
+  `npm version` at the root is refused. Release with `npm run bump -- <patch|minor|major>`,
+  which bumps the app, commits (the bare version as the message) and tags `vX.Y.Z`.
+- **TypeScript:** `tsconfig.base.json` holds the compiler options; every workspace has a
+  `tsconfig.json` (`src/`) and a `tsconfig.test.json` (`test/`), and the root
+  `tsconfig.json`/`tsconfig.test.json` reference them, built with `tsc -b`.
+
+The client (`packages/client/src/`) and the CLI (`apps/cli/src/`):
+
+```
+packages/client/src/
     csv.ts       # dependency-free CSV tokenizer + parser + German-number helper
     types.ts     # ResultRow / Party / Wahlkreis / StructureRow + ResultsQuery
     query.ts     # dependency-free query-string builder
@@ -247,7 +284,8 @@ src/
     errors.ts    # BundeswahlError / …ApiError / …NetworkError / …ValidationError / …ParseError
     validate.ts  # input rules as pure `…Problem` functions + assertValid (shared with the CLI)
     client.ts    # BundeswahlClient — results/parties/wahlkreise/structure (+ BTW2025 paths)
-  cli/
+    index.ts     # the client's public surface (the library entry re-exports it)
+apps/cli/src/cli/
     io.ts        # injectable I/O seam (stdout/stderr/file), the logger and the clock
     log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     shared.ts    # option parsers, global-option resolver, JSON renderer
@@ -263,7 +301,7 @@ an unhandled-EPIPE stack trace and exit 1; an EPIPE on stderr is ignored, so a f
 keeps its own exit code; any other stdout write error is an ERROR record of
 `bundeswahl.output` (`Could not write to stdout: …`, in the format argv asks for:
 `processLogger`) and exits 1.
-`test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin for both.
+`apps/cli/test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin for both.
 
 **Two seams make the whole thing testable in-process (no subprocesses):**
 `Transport` (the single HTTP function; tests inject a mock returning canned CSV) and
@@ -272,7 +310,7 @@ calling `process.exit`).
 
 ### Error types
 
-[`errors.ts`](src/client/errors.ts): `BundeswahlApiError` (non-2xx, carries
+[`errors.ts`](packages/client/src/errors.ts): `BundeswahlApiError` (non-2xx, carries
 `status`/`detail`, with `isRetryable`/`isNotFound`), `BundeswahlNetworkError`
 (transport failure/timeout), `BundeswahlParseError` (the body was not CSV — usually
 an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
@@ -288,7 +326,7 @@ extending `BundeswahlError`.
 
 ### Input validation
 
-The library owns every input rule. [`validate.ts`](src/client/validate.ts) holds them as
+The library owns every input rule. [`validate.ts`](packages/client/src/validate.ts) holds them as
 pure, exported functions: a `Problem` returns the reason a value is invalid, or
 `undefined`. `assertValid(name, value, problem)` throws `BundeswahlValidationError` with
 `Invalid <name>: <reason>` before any request is made (async methods reject rather than
@@ -304,16 +342,23 @@ quoted, so `"2"` doesn't read like `2`) and server text in a message are cut at
 surrogate pair (`cutText`), so the message stays well-formed and bounded for a library
 caller too; the error's own properties keep the full value. The CLI's own parse-time
 message for a dash-leading filter value (`parseTextArg`) quotes it the same way
-(`describeValue`). `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
+(`describeValue`). `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
 charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
-`test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
+`apps/cli/test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
 
 ## Testing
 
 ```bash
-npm test          # builds, then runs `node --test` over dist/test
+npm test          # builds, then runs `node --test` over each workspace's dist/test
+npm run coverage  # the same tests in one run, with a coverage report
+node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 ```
+
+The client's tests are in `packages/client/test/` (`csv`, `query`, `http`, `engine`,
+`client`, `retry-hook`), with the transport helpers (`helpers.ts`, which
+`apps/cli/test/helpers.ts` re-exports next to the CLI's own helpers) and the canned
+datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
 
 - **`csv.test.ts`** — the CSV parser: quotes/escapes/newlines, BOM, preamble skip,
   empty-row dropping, German numbers.
@@ -325,11 +370,11 @@ npm test          # builds, then runs `node --test` over dist/test
   mocked transport.
 - **`cli.test.ts`** — command parsing, the `results` filters, `--output`, and exit
   codes — mocked client.
-- **`log.test.ts`** — the record helpers of `src/cli/log.ts` on their own
+- **`log.test.ts`** — the record helpers of `apps/cli/src/cli/log.ts` on their own
   (`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
   P23's.
 - **`validate.test.ts`** — `assertValid`, the `run.ts` mapping of
-  `BundeswahlValidationError`, and the `parity()` helper (`test/helpers.ts`), which sends
+  `BundeswahlValidationError`, and the `parity()` helper (`apps/cli/test/helpers.ts`), which sends
   one input through `run()` and through the library on one recording mock transport so a
   test can assert both give the same outcome.
 - **`io.test.ts`** — `handleOutputErrors()` and `stderrAfterStdout` with fake streams: a
@@ -352,10 +397,13 @@ npm test          # builds, then runs `node --test` over dist/test
 
 GitHub Actions workflows under `.github/workflows/`:
 
-- **ci.yml** — type-check, build and test on Node 22/24 for every push and PR.
-- **release.yml** — on a `v*` tag: verify the tag matches `package.json`, test,
-  `npm pack`, and create a GitHub Release with the tarball.
-- **publish.yml** — manual dispatch from the release tag (`gh workflow run publish.yml --ref vX.Y.Z`; the version is the tag's): publish to npm via OIDC **Trusted Publishing**
+- **ci.yml** — type-check, build and test on Node 22/24 for every push and PR; then pack the
+  real tarball, check the pack left nothing behind, install it globally with the registry out
+  of reach and run the bin.
+- **release.yml** — on a `v*` tag (made by `npm run bump`): verify the tag matches
+  `apps/cli/package.json`, test, write the SBOMs (scoped to the `apps/cli` workspace), then
+  `npm pack --workspace apps/cli`, and create a GitHub Release with the tarball.
+- **publish.yml** — manual dispatch from the release tag (`gh workflow run publish.yml --ref vX.Y.Z`; the version is the tag's): `npm publish --workspace apps/cli` via OIDC **Trusted Publishing**
   (no stored `NPM_TOKEN`) with provenance.
 - **docs.yml** — build the project website (`site/`, English and German) with the TypeDoc API docs
   under `/api/`, and deploy both to GitHub Pages on each `v*` tag.
@@ -373,8 +421,10 @@ and deployed by `docs.yml` together with the TypeDoc API reference under `/api/`
 comes from this repository: the README intro and quick start, the command tree of the built CLI
 (`site/scripts/cli-reference.mjs`), `Usage.md`, `GLOSSARY.md` and its German version
 `GLOSSARY.de.md`, the skills, and the skill examples in `EXAMPLE.md` and `EXAMPLE.de.md`. The
-only repo-specific files are `site/_config.yml` and `site/_data/project.yml` (the German intro
-and the access requirements); the rest of `site/` is identical in every maschinenlesbar.org
+only repo-specific files are `site/_config.yml` (which also says where the published manifest
+and the built program are: `manifest: apps/cli/package.json`, `program:
+apps/cli/dist/src/cli/program.js`) and `site/_data/project.yml` (the German intro and the
+access requirements); the rest of `site/` is identical in every maschinenlesbar.org
 CLI, so change it in all of them together. When the README intro changes, update the German
 intro in `site/_data/project.yml`.
 
@@ -392,7 +442,7 @@ code contributions; see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## The log on stderr
 
-Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp, a level
+Every diagnostic line on stderr is a log record (`apps/cli/src/cli/log.ts`): a timestamp, a level
 (`ERROR`, `WARN`, `INFO`) and a topic, `bundeswahl.<area>`. `--log-format text` (the default)
 writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
 `--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
