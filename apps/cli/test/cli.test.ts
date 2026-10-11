@@ -1,0 +1,526 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { run } from "../src/cli/run.js";
+import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
+import type { CliDeps } from "../src/cli/io.js";
+import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
+import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
+import * as fx from "@maschinenlesbar.org/bundeswahlleiterin-client/test/fixtures";
+import { credentialsIn } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
+
+/** Route each dataset request to its fixture by the file name in the URL. */
+function routeFixture(req: HttpRequest): HttpResponse {
+  const u = req.url;
+  if (u.includes("kerg2")) return csvResponse(fx.kerg2Csv);
+  if (u.includes("parteien")) return csvResponse(fx.partiesCsv);
+  if (u.includes("wahlkreisnamen")) return csvResponse(fx.wahlkreiseCsv);
+  if (u.includes("strukturdaten")) return csvResponse(fx.structureCsv);
+  return csvResponse("a;b\n1;2\n");
+}
+
+function makeCli(responder: (req: HttpRequest) => HttpResponse = routeFixture) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const files: Record<string, Buffer> = {};
+  const mt = makeMockTransport(responder);
+  const deps: CliDeps = {
+    io: {
+      out: (s) => out.push(s),
+      err: (s) => err.push(s),
+      writeFile: (p, d, exclusive) => {
+        // Model the real "wx" semantics: an exclusive write fails with EEXIST if
+        // the path already holds bytes, so tests can exercise --force.
+        if (exclusive && files[p] !== undefined) {
+          const e: NodeJS.ErrnoException = new Error(`EEXIST: file already exists, open '${p}'`);
+          e.code = "EEXIST";
+          throw e;
+        }
+        files[p] = d;
+      },
+    },
+    createClient: (opts) => new BundeswahlClient({ ...opts, transport: mt.transport }),
+  };
+  return { deps, out, err, mt, files };
+}
+
+test("results renders JSON and hits the kerg2 path", async () => {
+  const cli = makeCli();
+  const code = await run(["results"], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.mt.last().url, /kerg2\.csv/);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 7);
+});
+
+test("results --vote erst maps to Erststimme (2 rows)", async () => {
+  const cli = makeCli();
+  await run(["results", "--vote", "erst"], cli.deps);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 2);
+});
+
+test("results --area-type + --party filter compose", async () => {
+  const cli = makeCli();
+  await run(["results", "--area-type", "Wahlkreis", "--party", "SPD", "--vote", "1"], cli.deps);
+  const rows = JSON.parse(cli.out.join("\n")) as Array<{ gruppenname: string }>;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.gruppenname, "SPD");
+});
+
+test("an invalid --area-type is rejected (exit 2)", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["results", "--area-type", "Kreis"], cli.deps), 2);
+});
+
+test("an invalid --vote is rejected (exit 2)", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["results", "--vote", "3"], cli.deps), 2);
+});
+
+test("parties lists the reference groups", async () => {
+  const cli = makeCli();
+  await run(["parties"], cli.deps);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 4);
+});
+
+test("wahlkreise --land filters by Land", async () => {
+  const cli = makeCli();
+  await run(["wahlkreise", "--land", "Bayern"], cli.deps);
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 1);
+});
+
+test("structure --wahlkreis matches ignoring leading zeros", async () => {
+  const cli = makeCli();
+  await run(["structure", "--wahlkreis", "001"], cli.deps);
+  const rows = JSON.parse(cli.out.join("\n")) as Array<Record<string, string>>;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!["Wahlkreis-Name"], "Flensburg – Schleswig");
+});
+
+test("a 404 exits 4", async () => {
+  const cli = makeCli(() => rawResponse(fx.htmlShell, "text/html", 404));
+  assert.equal(await run(["parties"], cli.deps), 4);
+});
+
+test("an HTML page instead of CSV exits 1 with a helpful message", async () => {
+  const cli = makeCli(() => rawResponse(fx.htmlShell, "text/html"));
+  const code = await run(["results"], cli.deps);
+  assert.equal(code, 1);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.api\] Expected a CSV file from .* but received an HTML page/);
+});
+
+test("--compact prints single-line JSON", async () => {
+  const cli = makeCli();
+  await run(["results", "--compact"], cli.deps);
+  assert.equal(cli.out.length, 1);
+});
+
+test("DEL and C1 control characters in server data are escaped in the JSON output", async () => {
+  const controls = String.fromCharCode(0x7f, 0x85, 0x9b) + "2J";
+  const esc = String.fromCharCode(0x1b) + "[31m";
+  const csv =
+    `Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n4;PARTEI;Partei;Rat${controls};${esc}\n` +
+    "28;UEBRIGE;System-Gruppe;Übrige;Übrige\n";
+  for (const format of [[], ["--compact"]]) {
+    const cli = makeCli(() => csvResponse(csv));
+    assert.equal(await run([...format, "parties"], cli.deps), 0);
+    const text = cli.out.join("\n");
+    const raw = [...text].filter((c) => c.charCodeAt(0) < 0x20 ? c !== "\n" : c.charCodeAt(0) >= 0x7f && c.charCodeAt(0) <= 0x9f);
+    assert.deepEqual(raw, [], format.join(" "));
+    assert.match(text, /Rat\\u007f\\u0085\\u009b2J/);
+    assert.deepEqual(JSON.parse(text), [
+      { gruppenschluessel: "4", gruppenartXml: "PARTEI", gruppenartCsv: "Partei", kurz: `Rat${controls}`, name: esc },
+      { gruppenschluessel: "28", gruppenartXml: "UEBRIGE", gruppenartCsv: "System-Gruppe", kurz: "Übrige", name: "Übrige" },
+    ]);
+  }
+});
+
+test("--output writes to a file and keeps stdout clean", async () => {
+  const cli = makeCli();
+  await run(["--output", "/tmp/br_out.json", "parties"], cli.deps);
+  assert.equal(cli.out.length, 0);
+  assert.ok(cli.files["/tmp/br_out.json"]);
+  assert.match(untimed(cli.err.join("\n")), /^INFO  \[bundeswahl\.output\] Wrote \d+ bytes to \/tmp\/br_out\.json$/);
+});
+
+test("--output refuses to overwrite an existing file (exit 1), unless --force", async () => {
+  const cli = makeCli();
+  // First write creates the file.
+  assert.equal(await run(["--output", "/tmp/br_dup.json", "parties"], cli.deps), 0);
+  const original = cli.files["/tmp/br_dup.json"];
+  assert.ok(original);
+
+  // A second write to the same path is refused with a clear message, exit 1, and
+  // the existing bytes are left untouched.
+  const code = await run(["--output", "/tmp/br_dup.json", "wahlkreise"], cli.deps);
+  assert.equal(code, 1);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Refusing to overwrite/m);
+  assert.equal(cli.files["/tmp/br_dup.json"], original);
+
+  // With --force the overwrite goes through.
+  assert.equal(await run(["--output", "/tmp/br_dup.json", "--force", "wahlkreise"], cli.deps), 0);
+  assert.notEqual(cli.files["/tmp/br_dup.json"], original);
+});
+
+test("a --output write failure reports a clean error (exit 1)", async () => {
+  const mt = makeMockTransport(routeFixture);
+  const err: string[] = [];
+  const deps: CliDeps = {
+    io: {
+      out: () => {},
+      err: (s) => err.push(s),
+      writeFile: () => {
+        throw new Error("EISDIR: illegal operation on a directory, open '/tmp'");
+      },
+    },
+    createClient: (opts) => new BundeswahlClient({ ...opts, transport: mt.transport }),
+  };
+  const code = await run(["--output", "/tmp", "parties"], deps);
+  assert.equal(code, 1);
+  assert.match(untimed(err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/tmp: EISDIR/);
+  assert.doesNotMatch(err.join("\n"), /Unexpected error/);
+});
+
+test("a control character in --user-agent is rejected (exit 2), no request", async () => {
+  const cli = makeCli();
+  const code = await run(["results", "--user-agent", "bad\r\nX: 1"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("a non-http --base-url is rejected (exit 2)", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--base-url", "ftp://x/y", "parties"], cli.deps), 2);
+});
+
+test("--max-retries above the sane maximum is rejected (exit 2)", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--max-retries", "1000", "parties"], cli.deps), 2);
+});
+
+test("--timeout accepts up to the largest timer Node supports", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--timeout", "2147483647", "parties"], cli.deps), 0);
+  assert.equal(cli.mt.last().timeoutMs, 2_147_483_647);
+
+  const over = makeCli();
+  assert.equal(await run(["--timeout", "2147483648", "parties"], over.deps), 2);
+  assert.equal(over.mt.calls.length, 0);
+  assert.match(over.err.join("\n"), /Must be <= 2147483647/);
+});
+
+test("a bare invocation prints help and exits 0", async () => {
+  const cli = makeCli();
+  const code = await run([], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.out.join("\n"), /Usage: bundeswahl/);
+});
+
+test("an unknown command exits 2", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["boguscmd"], cli.deps), 2);
+});
+
+// --- A starved filter option must not look like "nothing matched" -------------
+// `--party --group-type` makes commander hand "--group-type" to --party as its
+// value; the starved option is never applied. Before this was caught, the run
+// printed `[]` and exited 0 — indistinguishable from a real empty result.
+
+for (const [name, argv] of [
+  ["results --party", ["results", "--area-type", "Bund", "--vote", "2", "--party", "--group-type"]],
+  ["results --area", ["results", "--area", "--vote", "2"]],
+  ["results --group-type", ["results", "--group-type", "--vote", "2"]],
+  ["wahlkreise --land", ["wahlkreise", "--land", "--wahlkreis"]],
+  ["structure --wahlkreis", ["structure", "--wahlkreis", "--land"]],
+] as const) {
+  test(`a starved ${name} is a usage error, not an empty result`, async () => {
+    const cli = makeCli();
+    const code = await run(["--compact", ...argv], cli.deps);
+    assert.equal(code, 2);
+    assert.deepEqual(cli.out, []);
+    // Either diagnostic is fine — commander reports "argument missing" when the
+    // swallowed token is a known option of that command, and hands it to the
+    // parser (which rejects it) when it is not. Both are loud; neither is `[]`.
+    assert.match(cli.err.join("\n"), /looks like a missing value|argument missing/);
+  });
+}
+
+test("an empty filter value is a usage error", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "results", "--party", ""], cli.deps), 2);
+  assert.deepEqual(cli.out, []);
+});
+
+test("ordinary filter values still work", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "results", "--party", "SPD"], cli.deps), 0);
+  assert.ok(cli.out.join("").includes("SPD"));
+});
+
+// --- The official Land/Bund summary rows ------------------------------------
+
+test("structure excludes the aggregate rows by default", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  assert.ok(rows.every((r) => Number(r["Wahlkreis-Nr."]) <= 299));
+  assert.ok(!rows.some((r) => r["Wahlkreis-Name"] === "Land insgesamt"));
+});
+
+test("structure --include-aggregates returns the official summary rows", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure", "--include-aggregates"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  const agg = rows.filter((r) => Number(r["Wahlkreis-Nr."]) > 299);
+  assert.deepEqual(
+    agg.map((r) => [r["Wahlkreis-Nr."], r["Wahlkreis-Name"]]),
+    [["901", "Land insgesamt"], ["999", "Insgesamt"]],
+  );
+});
+
+test("--include-aggregates makes an aggregate reachable by its number", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "structure", "--include-aggregates", "--wahlkreis", "901"], cli.deps), 0);
+  const rows = JSON.parse(cli.out.join("")) as Record<string, string>[];
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!["Land"], "Schleswig-Holstein");
+});
+
+test("a --base-url with a query, a fragment or surrounding whitespace is a usage error", async () => {
+  for (const [baseUrl, message] of [
+    ["http://127.0.0.1:18106/m/s404?x=1", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106/m/s404#frag", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106?", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:18106/m/s404 ", /cannot have surrounding whitespace/],
+    [" https://www.bundeswahlleiterin.de", /cannot have surrounding whitespace/],
+  ] as const) {
+    const cli = makeCli();
+    assert.equal(await run(["--base-url", baseUrl, "parties"], cli.deps), 2, baseUrl);
+    assert.equal(cli.mt.calls.length, 0, baseUrl);
+    assert.match(cli.err.join("\n"), message, baseUrl);
+  }
+});
+
+test("a --base-url with a path prefix still works", async () => {
+  const cli = makeCli();
+  assert.equal(await run(["--base-url", "https://mirror.example/bwl/", "parties"], cli.deps), 0);
+  assert.match(cli.mt.last().url, /^https:\/\/mirror\.example\/bwl\/dam\/jcr\/.*btw25_parteien\.csv$/);
+});
+
+test("credentials in --base-url are redacted in error messages but still sent", async () => {
+  const cli = makeCli(() => rawResponse("not here", "text/plain", 404));
+  assert.equal(await run(["--base-url", "http://user:s3cret@127.0.0.1:18106/m", "parties"], cli.deps), 4);
+  const err = cli.err.join("\n");
+  assert.doesNotMatch(err, /s3cret|user:/);
+  assert.match(err, /HTTP 404 for GET http:\/\/\*\*\*@127\.0\.0\.1:18106\/m\/dam\/jcr\//);
+  assert.match(cli.mt.last().url, /^http:\/\/user:s3cret@127\.0\.0\.1:18106\//);
+});
+
+test("repeating a filter option is a usage error, not a silent last-one-wins", async () => {
+  for (const args of [
+    ["results", "--party", "SPD", "--party", "CDU"],
+    ["results", "--area", "Kiel", "--area", "001"],
+    ["results", "--area-type", "Bund", "--area-type", "Land"],
+    ["results", "--vote", "1", "--vote", "2"],
+    ["results", "--group-type", "Partei", "--group-type", "System-Gruppe"],
+    ["wahlkreise", "--land", "BY", "--land", "SN"],
+    ["structure", "--wahlkreis", "1", "--wahlkreis", "2"],
+  ]) {
+    const cli = makeCli();
+    assert.equal(await run(args, cli.deps), 2, args.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /Given more than once; this option takes a single value\./);
+  }
+});
+
+test("a blank --user-agent is a usage error, not a silent fallback to the default", async () => {
+  for (const ua of ["", "   "]) {
+    const cli = makeCli();
+    assert.equal(await run(["--user-agent", ua, "parties"], cli.deps), 2, JSON.stringify(ua));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), /Expected a non-empty value/);
+  }
+});
+
+test("-o with a blank path is a usage error; -o - writes to stdout, not a file named '-'", async () => {
+  for (const path of ["", " "]) {
+    const cli = makeCli();
+    assert.equal(await run(["-o", path, "parties"], cli.deps), 2, JSON.stringify(path));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.deepEqual(cli.files, {});
+    assert.match(cli.err.join("\n"), /Expected a non-empty value/);
+  }
+  const cli = makeCli();
+  assert.equal(await run(["--compact", "-o", "-", "parties"], cli.deps), 0);
+  assert.deepEqual(cli.files, {});
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 4);
+  assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
+});
+
+test("a --user-agent with control or non-Latin-1 characters is a usage error, no request", async () => {
+  for (const [ua, message] of [
+    ["€-agent", /outside Latin-1/],
+    ["a\r\nX-Evil: 1", /control characters/],
+  ] as const) {
+    const cli = makeCli();
+    assert.equal(await run(["--user-agent", ua, "parties"], cli.deps), 2, ua);
+    assert.equal(cli.mt.calls.length, 0, ua);
+    assert.match(cli.err.join("\n"), message, ua);
+  }
+  const ok = makeCli();
+  assert.equal(await run(["--user-agent", "bot\tmüller/1.0", "parties"], ok.deps), 0);
+  assert.equal(ok.mt.last().headers?.["User-Agent"], "bot\tmüller/1.0");
+});
+
+test("a line break, ESC or bidi control in a typed value never forges a record (--party, -o)", async () => {
+  const forged = "x\n2026-10-09T00:00:00.000Z INFO  [bundeswahl.api] forged\u001b]0;title\u0007\u202e\u2028";
+  const record = /^\S+Z (ERROR|WARN |INFO ) \[bundeswahl\.[a-z-]+\] /;
+  const raw = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e]/;
+  const party = makeCli();
+  assert.equal(await run(["results", "--party", `-${forged}`], party.deps), 2);
+  // A second run writes the same path: the "Wrote" note, then the refusal.
+  const output = makeCli();
+  assert.equal(await run(["-o", forged, "parties"], output.deps), 0);
+  assert.equal(await run(["-o", forged, "parties"], output.deps), 1);
+  for (const err of [party.err, output.err]) {
+    for (const line of err) {
+      assert.match(line, record, JSON.stringify(line));
+      assert.doesNotMatch(line, raw, JSON.stringify(line));
+    }
+  }
+});
+
+test("a dash-leading filter value is quoted once by the CLI's own message, cut at 500 characters", async () => {
+  const cli = makeCli();
+  const value = `-${"A".repeat(200_000)}`;
+  assert.equal(await run(["results", "--party", value], cli.deps), 2);
+  const record = cli.err[0] ?? "";
+  // commander's echo is cut by the record cap; the CLI's own note quotes the value cut.
+  assert.ok(record.length < 4200, `${record.length}`);
+  assert.ok(!record.includes("A".repeat(4001)), "one value whole in the record");
+  const own = makeCli();
+  assert.equal(await run(["results", "--party", `-${"B".repeat(1000)}`], own.deps), 2);
+  assert.match(own.err[0] ?? "", /looks like a missing value — "-B{498}… is the next option/);
+});
+
+test("jsonl never prints a rejected base URL's password with DEL or C1 plus a space", async () => {
+  for (const password of ["p\u007fq r", "p\u0085q r"]) {
+    const cli = makeCli();
+    const code = await run(["--log-format", "jsonl", "--base-url", `http://bob:${password}@127.0.0.1:99999/ok`, "parties"], cli.deps);
+    assert.equal(code, 2);
+    const all = cli.err.join("\n");
+    assert.ok(!all.includes("q r") && !all.includes("bob:p"), all);
+    assert.match(all, /http:\/\/\*\*\*@127\.0\.0\.1:99999\/ok/);
+  }
+});
+
+test("a server echoing the Authorization header never puts the credentials into the record", async () => {
+  const basic = Buffer.from("alice:s3cretpw", "utf8").toString("base64");
+  for (const format of ["text", "jsonl"]) {
+    const cli = makeCli(() => rawResponse(`denied for Basic ${basic} decoded alice:s3cretpw`, "text/plain", 401));
+    const code = await run(["--log-format", format, "--base-url", "http://alice:s3cretpw@127.0.0.1:18431/echoauth", "parties"], cli.deps);
+    assert.equal(code, 1);
+    const all = cli.err.join("\n");
+    assert.match(all, /denied for Basic \*\*\* decoded \*\*\*/, all);
+    assert.ok(!all.includes(basic) && !all.includes("s3cretpw"), all);
+  }
+});
+
+test("an a:b@c argument (a User-Agent, an -o path) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {
+  const csv = fx.partiesCsv.replace("Sozialdemokratische Partei Deutschlands", "run:2026-10-09@x");
+  const cli = makeCli(() => csvResponse(csv));
+  assert.equal(await run(["--user-agent", "run:2026-10-09@x", "parties"], cli.deps), 0);
+  assert.match(cli.out.join("\n"), /"run:2026-10-09@x"/);
+  const written = makeCli(() => csvResponse(csv));
+  assert.equal(await run(["-o", "run:2026-10-09@x.json", "parties"], written.deps), 0);
+  assert.match(untimed(written.err.join("\n")), /^INFO  \[bundeswahl\.output\] Wrote \d+ bytes to run:2026-10-09@x\.json$/);
+  assert.match(written.files["run:2026-10-09@x.json"]?.toString() ?? "", /"run:2026-10-09@x"/);
+  assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
+  assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
+});
+
+test("commander's output is one record per line, and a run without a command has an ERROR (L5)", async () => {
+  // Options but no command: commander shows the help as an error.
+  for (const argv of [["--compact"], ["--log-format", "jsonl"]]) {
+    const none = makeCli();
+    assert.equal(await run(argv, none.deps), 2);
+    const lines = none.err.map((line) => (argv[0] === "--log-format" ? (JSON.parse(line) as { level: string; msg: string }) : null));
+    if (argv[0] === "--log-format") {
+      assert.deepEqual([lines[0]?.level, lines[0]?.msg], ["ERROR", "missing command: `bundeswahl <subcommand>`"]);
+      assert.ok(lines.slice(1).every((r) => r?.level === "INFO" && !r.msg.includes("\n")), none.err.join("\n"));
+      continue;
+    }
+    const text = none.err.map(untimed);
+    assert.equal(text[0], "ERROR [bundeswahl.cli] missing command: `bundeswahl <subcommand>`");
+    assert.ok(text.slice(1).every((line) => line.startsWith("INFO  [bundeswahl.cli] ") && !line.includes("\\n")), text.join("\n"));
+    assert.ok(text.some((line) => line === "INFO  [bundeswahl.cli] Usage: bundeswahl [options] [command]"), text.join("\n"));
+  }
+
+  // A command typo: the suggestion is part of the ERROR, the help one INFO record per line.
+  const typo = makeCli();
+  assert.equal(await run(["partys"], typo.deps), 2);
+  const typoLines = typo.err.map(untimed);
+  assert.equal(typoLines[0], "ERROR [bundeswahl.cli] unknown command 'partys' (Did you mean parties?)");
+  assert.ok(typoLines.slice(1).every((line) => line.startsWith("INFO  [bundeswahl.cli] ") && !line.includes("\\n")), typoLines.join("\n"));
+
+  // An unknown help topic is an ERROR too.
+  const help = makeCli();
+  assert.notEqual(await run(["help", "nosuch"], help.deps), 0);
+  assert.match(untimed(help.err[0] ?? ""), /^ERROR \[bundeswahl\.cli\] /);
+});
+
+test("the log format is the one commander parsed, where an option's value looks like --log-format (L6)", async () => {
+  const isJsonl = (line: string): boolean => line.startsWith("{");
+  const notFound = () => csvResponse("nope", 404);
+  // commander takes "--log-format=jsonl" as the User-Agent: the record is text.
+  const ua = makeCli(notFound);
+  assert.equal(await run(["--user-agent", "--log-format=jsonl", "parties"], ua.deps), 4);
+  assert.ok(ua.err.length === 1 && !isJsonl(ua.err[0] as string), ua.err.join("\n"));
+  // commander takes "--" as the User-Agent, then parses --log-format jsonl: jsonl.
+  const dashes = makeCli(notFound);
+  assert.equal(await run(["--user-agent", "--", "--log-format", "jsonl", "parties"], dashes.deps), 4);
+  assert.ok(dashes.err.length === 1 && isJsonl(dashes.err[0] as string), dashes.err.join("\n"));
+  // jsonl asked for, then "--log-format" as the value of --user-agent and of -o: jsonl.
+  const back = makeCli(notFound);
+  assert.equal(await run(["--log-format", "jsonl", "--user-agent", "--log-format", "parties"], back.deps), 4);
+  assert.ok(back.err.length === 1 && isJsonl(back.err[0] as string), back.err.join("\n"));
+  const output = makeCli();
+  assert.equal(await run(["--log-format", "jsonl", "-o", "--log-format", "parties"], output.deps), 0);
+  assert.ok(output.err.length === 1 && isJsonl(output.err[0] as string), output.err.join("\n"));
+  // A parse error after such a value is logged in the format commander would have used.
+  const parse = makeCli();
+  assert.equal(await run(["--user-agent", "--log-format", "jsonl", "parties"], parse.deps), 2);
+  assert.ok(parse.err.length > 0 && !parse.err.some(isJsonl), parse.err.join("\n"));
+});
+
+test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", async () => {
+  for (const thrown of [new Error("ENOENT: no such file or directory, open '/nonexistent/x'"), new Error("EACCES: permission denied, open '/nonexistent/x'"), "not an Error"]) {
+    const cli = makeCli();
+    cli.deps.io.writeFile = () => {
+      throw thrown;
+    };
+    assert.equal(await run(["-o", "/nonexistent/x", "parties"], cli.deps), 1);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent\/x: /);
+    assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
+  }
+});
+
+test("the -o failure drops Node's \", open '<path>'\" tail also when the path holds a line break", async () => {
+  for (const path of ["/nonexistent\nZZ/x", "/nonexistent\rZZ/x", "/nonexistent/x"]) {
+    const cli = makeCli();
+    cli.deps.io.writeFile = (p) => {
+      throw Object.assign(new Error(`ENOENT: no such file or directory, open '${p}'`), { code: "ENOENT" });
+    };
+    assert.equal(await run(["-o", path, "parties"], cli.deps), 1);
+    assert.equal(cli.err.length, 1, cli.err.join("\n"));
+    const msg = untimed(cli.err[0] as string);
+    assert.match(msg, /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent.*: ENOENT: no such file or directory$/);
+    assert.doesNotMatch(msg, /open '/);
+  }
+});
+
+test("a subcommand's value option does not swallow the program's --log-format, in a parse error too (L6)", async () => {
+  // commander takes the program's --log-format out of argv first; --area is left without its value.
+  const cli = makeCli();
+  assert.notEqual(await run(["results", "--area", "--log-format", "jsonl"], cli.deps), 0);
+  assert.ok(cli.err.length > 0 && cli.err.every((line) => line.startsWith("{")), cli.err.join("\n"));
+  assert.match((JSON.parse(cli.err[0] ?? "") as Record<string, unknown>)["msg"] as string, /--area <nr-or-name>' argument missing/);
+});
