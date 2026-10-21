@@ -449,7 +449,27 @@ test("a dash-leading filter value is quoted once by the CLI's own message, cut a
   assert.ok(!record.includes("A".repeat(4001)), "one value whole in the record");
   const own = makeCli();
   assert.equal(await run(["results", "--party", `-${"B".repeat(1000)}`], own.deps), 2);
-  assert.match(own.err[0] ?? "", /looks like a missing value — "-B{498}… is the next option/);
+  assert.match(own.err[0] ?? "", /looks like a missing value — "-B{499}"… is the next option/);
+});
+
+test("a refusal quotes the value visibly: invisible and format characters escaped, never raw (D10)", async () => {
+  for (const [argv, ch] of [
+    [["results", "--party", "-SPD\u200b"], "\u200b"],
+    [["results", "--area-type", "Bund\u202e"], "\u202e"],
+    [["-o", "-x\u00ad.json", "parties"], "\u00ad"],
+  ] as const) {
+    const cli = makeCli();
+    assert.equal(await run([...argv], cli.deps), 2, argv.join(" "));
+    const own = cli.err.find((line) => /looks like a missing value|got "/.test(line)) ?? cli.err.join("\n");
+    assert.ok(!cli.err.join("\n").includes(ch), `${argv.join(" ")}: raw ${JSON.stringify(ch)} in ${own}`);
+    assert.ok(cli.err.join("\n").toLowerCase().includes(`\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`), own);
+  }
+  // The library quotes the same way.
+  const c = new BundeswahlClient({ transport: makeMockTransport(routeFixture).transport });
+  await assert.rejects(
+    () => c.results({ areaType: "Bund\u200b" as never }),
+    (err: Error) => err.message.includes('got "Bund\\u200b"') && !err.message.includes("\u200b"),
+  );
 });
 
 test("jsonl never prints a rejected base URL's password with DEL or C1 plus a space", async () => {

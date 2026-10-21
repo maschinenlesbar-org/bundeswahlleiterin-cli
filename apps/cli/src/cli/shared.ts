@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { OutputError, isDirectoryMessage, logOf, nodeFiles, refuseOverwrite, type CliDeps } from "./io.js";
 import type { BundeswahlClientOptions } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
-import { BundeswahlValidationError, describeValue } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
+import { BundeswahlValidationError, quoteValue } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
 import { cleartextProblem, DEFAULT_BASE_URL, isBidiControl, type RetryEvent } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/engine";
 import { baseUrlProblem, headerValueProblem } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/validate";
 
@@ -84,8 +84,9 @@ export function forbidRepeatedOptions(command: Command): void {
  * told apart here — and no Land, Wahlkreis, party or Gruppenart in this dataset
  * begins with a dash, so nothing legitimate is lost.
  *
- * The message quotes the value as the library does (`describeValue`: JSON-quoted, cut at
- * `MAX_MESSAGE_VALUE_LENGTH`), so a huge value can't make the record huge twice.
+ * The message quotes the value as the library does (`quoteValue`: JSON-quoted, invisible
+ * characters escaped, cut at `MAX_MESSAGE_VALUE_LENGTH`), so a huge value can't make the
+ * record huge twice and a zero-width space can't hide.
  */
 export function parseTextArg(value: string): string {
   if (value.trim() === "") {
@@ -93,7 +94,7 @@ export function parseTextArg(value: string): string {
   }
   if (/^--?[^\s]/.test(value)) {
     throw new InvalidArgumentError(
-      `looks like a missing value — ${describeValue(value)} is the next option, consumed because ` +
+      `looks like a missing value — ${quoteValue(value)} is the next option, consumed because ` +
         "this one was left without a value. No name or number in this dataset starts " +
         "with a dash; supply the intended value.",
     );
@@ -116,7 +117,7 @@ export function parseOutputPath(value: string): string {
   parseNonEmpty(value);
   if (value !== "-" && value.startsWith("-")) {
     throw new InvalidArgumentError(
-      `looks like a missing value — ${describeValue(value)} is the next option, consumed because ` +
+      `looks like a missing value — ${quoteValue(value)} is the next option, consumed because ` +
         "this one was left without a value. For a file whose name starts with a dash, write ./-name.",
     );
   }

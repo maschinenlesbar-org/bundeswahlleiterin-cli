@@ -29,6 +29,7 @@ export {
   redactUrl,
   cutForMessage,
   describeValue,
+  quoteValue,
   MAX_MESSAGE_VALUE_LENGTH,
   credentialsIn,
   redactCredentials,

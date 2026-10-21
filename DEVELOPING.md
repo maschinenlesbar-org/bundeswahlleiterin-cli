@@ -354,12 +354,16 @@ drift apart.
 Every rejected input is a `BundeswahlValidationError`, never a raw `TypeError`: a
 non-function `transport` or `sleep`, a `defaultHeaders` that isn't an object and a
 non-object query all fail in the constructor or before any request. An echoed value (JSON-
-quoted, so `"2"` doesn't read like `2`) and server text in a message are cut at
+quoted, so `"2"` doesn't read like `2`, with DEL, C1, U+2028/2029 and every format character —
+a zero-width space, a soft hyphen, a bidi control — escaped as `\uXXXX`: `quoteValue`, exported)
+and server text in a message are cut at
 `MAX_MESSAGE_VALUE_LENGTH` (500) characters, a server's error text at 200, never inside a
 surrogate pair (`cutText`), so the message stays well-formed and bounded for a library
 caller too; the error's own properties keep the full value. The CLI's own parse-time
 message for a dash-leading filter value (`parseTextArg`) quotes it the same way
-(`describeValue`). `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
+(`quoteValue`), and commander's own echo of a rejected value (`argument '…' is invalid`) has
+its control and format characters escaped too (`escapeTerminalText` in `run.ts`), so a refused
+value never looks valid. `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the declared
 charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
 `apps/cli/test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
