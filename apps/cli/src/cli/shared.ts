@@ -3,9 +3,9 @@
 
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { OutputError, logOf, type CliDeps } from "./io.js";
+import { OutputError, isDirectoryMessage, logOf, nodeFiles, refuseOverwrite, type CliDeps } from "./io.js";
 import type { BundeswahlClientOptions } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
-import { describeValue } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
+import { BundeswahlValidationError, describeValue } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
 import { cleartextProblem, DEFAULT_BASE_URL, type RetryEvent } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/engine";
 import { baseUrlProblem, headerValueProblem } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/validate";
 
@@ -222,38 +222,47 @@ function holdsHugeString(value: unknown): boolean {
 }
 
 /**
- * Render a JSON value, pretty by default and compact with --compact. Writes to the
- * file given by --output (with a short stderr confirmation so stdout stays clean
- * for piping), or to stdout otherwise — also for `--output -`.
+ * Check `-o` before any request, so a refused target costs none: `--force` without `-o`, a
+ * directory, and an existing path (a dangling link too) without `--force` are usage errors
+ * (exit 2). `-o -` is stdout. The write checks again: a file that appears during the request
+ * is not overwritten either (an OutputError then).
+ */
+export function checkOutputTarget(deps: CliDeps, global: GlobalOptions): void {
+  if (global.force === true && global.output === undefined) {
+    throw new BundeswahlValidationError("--force needs --output (it only allows overwriting the -o file).");
+  }
+  const path = fileOf(global);
+  if (path === undefined) return;
+  const state = (deps.files ?? nodeFiles).state(path);
+  if (state === "directory") throw new BundeswahlValidationError(isDirectoryMessage(path));
+  if (state === "exists" && global.force !== true) throw new BundeswahlValidationError(refuseOverwrite(path));
+}
+
+/** The `-o` file, or undefined for stdout (no `-o`, or `-o -`). */
+function fileOf(global: GlobalOptions): string | undefined {
+  return global.output === undefined || global.output === "-" ? undefined : global.output;
+}
+
+/**
+ * Render a JSON value, pretty by default and compact with --compact, to stdout or to the
+ * `-o` file (with an INFO record of `bundeswahl.output` saying how many bytes went where, so
+ * stdout stays clean for a pipe; `-o -` is stdout). The file holds exactly what stdout would
+ * show, plus a newline, and is written atomically (`nodeFiles`): a write that fails part-way
+ * leaves the old file as it was and no half-written or temporary file behind. Without
+ * `--force` an existing file is never overwritten, not even one that appeared during the
+ * request. Every failure is an OutputError naming the file.
  */
 export function renderJson(deps: CliDeps, global: GlobalOptions, value: unknown): void {
   const text = escapeControlChars(stringifyJson(value, global.compact === true));
-  if (global.output !== undefined && global.output !== "-") {
-    const data = Buffer.from(text + "\n", "utf8");
-    try {
-      // Refuse to overwrite an existing file unless --force: the exclusive ("wx")
-      // write throws EEXIST, which we turn into a clear, actionable message so a
-      // stray --output never silently clobbers the user's own data.
-      deps.io.writeFile(global.output, data, !global.force);
-    } catch (err) {
-      if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EEXIST") {
-        throw new OutputError(
-          `Refusing to overwrite existing file ${global.output} — pass --force to overwrite.`,
-          { cause: err },
-        );
-      }
-      // A bad --output path (missing directory, a directory, no permission) is a
-      // user error, not an internal fault — surface it as a clean OutputError (logged
-      // under bundeswahl.output) instead of letting the raw fs exception hit the
-      // "Unexpected error" path. Drop the `, open '<path>'` tail since we already name
-      // the path ourselves; the `s` flag lets it span a path with a line break in it.
-      const reason = err instanceof Error ? err.message.replace(/,\s*open\s+'.*'$/s, "") : String(err);
-      throw new OutputError(`Could not write to ${global.output}: ${reason}`, { cause: err });
-    }
-    logOf(deps).info("output", `Wrote ${data.length} bytes to ${global.output}`);
-  } else {
-    deps.io.out(text);
+  const path = fileOf(global);
+  if (path === undefined) return deps.io.out(text);
+  const data = Buffer.from(`${text}\n`, "utf8");
+  try {
+    (deps.files ?? nodeFiles).write(path, data, global.force === true);
+  } catch (cause) {
+    throw new OutputError(cause instanceof Error ? cause.message : String(cause), { cause });
   }
+  logOf(deps).info("output", `Wrote ${data.length} bytes to ${path}`);
 }
 
 /**
@@ -303,6 +312,8 @@ export function action(
     const command = args[args.length - 1] as Command;
     const positionals = args.slice(0, Math.max(0, args.length - 2)) as string[];
     const global = command.optsWithGlobals() as GlobalOptions;
+    // A refused -o target is a usage error before anything else happens.
+    checkOutputTarget(deps, global);
     warnOnCleartext(deps, global);
     const options = toEngineOptions(global);
     options.onRetry = (event) => logOf(deps).warn("http", retryMessage(event));

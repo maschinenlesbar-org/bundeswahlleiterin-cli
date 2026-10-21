@@ -48,7 +48,8 @@ function makeDeps(
   transport: () => Promise<HttpResponse>,
 ): CliDeps {
   return {
-    io: { out: io.out, err: io.err, writeFile: io.writeFile },
+    io: { out: io.out, err: io.err },
+    files: { state: () => "absent", write: (path, data) => io.writeFile(path, data) },
     createClient: (opts) => new Client({ ...opts, transport }),
   };
 }

@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultIO, handleOutputErrors, stderrAfterStdout } from "../src/cli/io.js";
+import { handleOutputErrors, isDirectoryMessage, nodeFiles, refuseOverwrite, stderrAfterStdout } from "../src/cli/io.js";
 import { createLogger } from "../src/cli/log.js";
 
 function streams() {
@@ -66,20 +66,18 @@ test("without a logger, a stdout write error is a text ERROR record on the strea
   assert.match(written[0] ?? "", /^\S+Z ERROR \[bundeswahl\.output\] Could not write to stdout: write EBADF\n$/);
 });
 
-test("defaultIO.writeFile onto an existing directory fails with EISDIR, with or without --force, never EEXIST", () => {
+test("nodeFiles refuses a directory, with or without --force, and an existing file without it", () => {
   const dir = mkdtempSync(join(tmpdir(), "bundeswahl-io-"));
   try {
-    for (const exclusive of [true, false]) {
-      assert.throws(
-        () => defaultIO.writeFile(dir, Buffer.from("x"), exclusive),
-        (err: NodeJS.ErrnoException) => err.code === "EISDIR" && /^EISDIR: illegal operation on a directory/.test(err.message),
-        `exclusive: ${exclusive}`,
-      );
+    for (const overwrite of [true, false]) {
+      assert.throws(() => nodeFiles.write(dir, Buffer.from("x"), overwrite), { message: isDirectoryMessage(dir) }, `overwrite: ${overwrite}`);
     }
-    // An existing file is still EEXIST without --force (the "pass --force" refusal).
     const file = join(dir, "x.json");
-    defaultIO.writeFile(file, Buffer.from("1"), true);
-    assert.throws(() => defaultIO.writeFile(file, Buffer.from("2"), true), (err: NodeJS.ErrnoException) => err.code === "EEXIST");
+    nodeFiles.write(file, Buffer.from("1"), false);
+    assert.throws(() => nodeFiles.write(file, Buffer.from("2"), false), { message: refuseOverwrite(file) });
+    nodeFiles.write(file, Buffer.from("3"), true);
+    assert.equal(readFileSync(file, "utf8"), "3");
+    assert.deepEqual(readdirSync(dir), ["x.json"]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

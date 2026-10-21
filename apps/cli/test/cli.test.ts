@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { run } from "../src/cli/run.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
-import type { CliDeps } from "../src/cli/io.js";
+import { refuseOverwrite, type CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
 import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
 import * as fx from "@maschinenlesbar.org/bundeswahlleiterin-client/test/fixtures";
@@ -24,17 +24,12 @@ function makeCli(responder: (req: HttpRequest) => HttpResponse = routeFixture) {
   const files: Record<string, Buffer> = {};
   const mt = makeMockTransport(responder);
   const deps: CliDeps = {
-    io: {
-      out: (s) => out.push(s),
-      err: (s) => err.push(s),
-      writeFile: (p, d, exclusive) => {
-        // Model the real "wx" semantics: an exclusive write fails with EEXIST if
-        // the path already holds bytes, so tests can exercise --force.
-        if (exclusive && files[p] !== undefined) {
-          const e: NodeJS.ErrnoException = new Error(`EEXIST: file already exists, open '${p}'`);
-          e.code = "EEXIST";
-          throw e;
-        }
+    io: { out: (s) => out.push(s), err: (s) => err.push(s) },
+    // In memory, with the real seam's rules: without --force an existing file is refused.
+    files: {
+      state: (p) => (files[p] !== undefined ? "exists" : "absent"),
+      write: (p, d, overwrite) => {
+        if (!overwrite && files[p] !== undefined) throw new Error(refuseOverwrite(p));
         files[p] = d;
       },
     },
@@ -141,18 +136,20 @@ test("--output writes to a file and keeps stdout clean", async () => {
   assert.match(untimed(cli.err.join("\n")), /^INFO  \[bundeswahl\.output\] Wrote \d+ bytes to \/tmp\/br_out\.json$/);
 });
 
-test("--output refuses to overwrite an existing file (exit 1), unless --force", async () => {
+test("--output refuses to overwrite an existing file before any request (exit 2), unless --force", async () => {
   const cli = makeCli();
   // First write creates the file.
   assert.equal(await run(["--output", "/tmp/br_dup.json", "parties"], cli.deps), 0);
   const original = cli.files["/tmp/br_dup.json"];
   assert.ok(original);
+  const requests = cli.mt.calls.length;
 
-  // A second write to the same path is refused with a clear message, exit 1, and
-  // the existing bytes are left untouched.
+  // A second write to the same path is refused with a clear message, exit 2, before any
+  // request, and the existing bytes are left untouched.
   const code = await run(["--output", "/tmp/br_dup.json", "wahlkreise"], cli.deps);
-  assert.equal(code, 1);
-  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Refusing to overwrite/m);
+  assert.equal(code, 2);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.cli\] Refusing to overwrite existing file "\/tmp\/br_dup\.json" — pass --force to overwrite\.$/m);
+  assert.equal(cli.mt.calls.length, requests);
   assert.equal(cli.files["/tmp/br_dup.json"], original);
 
   // With --force the overwrite goes through.
@@ -164,18 +161,18 @@ test("a --output write failure reports a clean error (exit 1)", async () => {
   const mt = makeMockTransport(routeFixture);
   const err: string[] = [];
   const deps: CliDeps = {
-    io: {
-      out: () => {},
-      err: (s) => err.push(s),
-      writeFile: () => {
-        throw new Error("EISDIR: illegal operation on a directory, open '/tmp'");
+    io: { out: () => {}, err: (s) => err.push(s) },
+    files: {
+      state: () => "absent",
+      write: () => {
+        throw new Error('Could not write to "/tmp/x.json": EACCES: permission denied');
       },
     },
     createClient: (opts) => new BundeswahlClient({ ...opts, transport: mt.transport }),
   };
-  const code = await run(["--output", "/tmp", "parties"], deps);
+  const code = await run(["--output", "/tmp/x.json", "parties"], deps);
   assert.equal(code, 1);
-  assert.match(untimed(err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/tmp: EISDIR/);
+  assert.match(untimed(err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to "\/tmp\/x\.json": EACCES/);
   assert.doesNotMatch(err.join("\n"), /Unexpected error/);
 });
 
@@ -391,7 +388,7 @@ test("a line break, ESC or bidi control in a typed value never forges a record (
   // A second run writes the same path: the "Wrote" note, then the refusal.
   const output = makeCli();
   assert.equal(await run(["-o", forged, "parties"], output.deps), 0);
-  assert.equal(await run(["-o", forged, "parties"], output.deps), 1);
+  assert.equal(await run(["-o", forged, "parties"], output.deps), 2);
   for (const err of [party.err, output.err]) {
     for (const line of err) {
       assert.match(line, record, JSON.stringify(line));
@@ -504,13 +501,16 @@ test("the log format is the one commander parsed, where an option's value looks 
 });
 
 test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", async () => {
-  for (const thrown of [new Error("ENOENT: no such file or directory, open '/nonexistent/x'"), new Error("EACCES: permission denied, open '/nonexistent/x'"), "not an Error"]) {
+  for (const thrown of [new Error('Could not write to "/nonexistent/x": EACCES: permission denied'), "not an Error"]) {
     const cli = makeCli();
-    cli.deps.io.writeFile = () => {
-      throw thrown;
+    cli.deps.files = {
+      state: () => "absent",
+      write: () => {
+        throw thrown;
+      },
     };
     assert.equal(await run(["-o", "/nonexistent/x", "parties"], cli.deps), 1);
-    assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent\/x: /);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.output\] (Could not write to "\/nonexistent\/x": EACCES|not an Error)/);
     assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
   }
 });
@@ -518,13 +518,11 @@ test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", as
 test("the -o failure drops Node's \", open '<path>'\" tail also when the path holds a line break", async () => {
   for (const path of ["/nonexistent\nZZ/x", "/nonexistent\rZZ/x", "/nonexistent/x"]) {
     const cli = makeCli();
-    cli.deps.io.writeFile = (p) => {
-      throw Object.assign(new Error(`ENOENT: no such file or directory, open '${p}'`), { code: "ENOENT" });
-    };
+    delete cli.deps.files; // the real file system: the directory doesn't exist
     assert.equal(await run(["-o", path, "parties"], cli.deps), 1);
     assert.equal(cli.err.length, 1, cli.err.join("\n"));
     const msg = untimed(cli.err[0] as string);
-    assert.match(msg, /^ERROR \[bundeswahl\.output\] Could not write to \/nonexistent.*: ENOENT: no such file or directory$/);
+    assert.match(msg, /^ERROR \[bundeswahl\.output\] Could not write to "\/nonexistent.*": ENOENT: no such file or directory$/);
     assert.doesNotMatch(msg, /open '/);
   }
 });

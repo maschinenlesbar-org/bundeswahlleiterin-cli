@@ -19,8 +19,8 @@ async function exercise(extra: string[], failures: number, retryAfter?: string, 
       ? { status: 503, headers: retryAfter ? { "retry-after": retryAfter } : {}, body: Buffer.from("{}") }
       : { status: 200, headers: { "content-type": "text/csv" }, body: Buffer.from(fx.partiesCsv) };
   const deps: CliDeps = {
-    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {}, },
-    
+    io: { out: (s) => out.push(s), err: (s) => err.push(s) },
+    files: { state: () => "absent", write: () => {} },
     now: () => new Date("2026-01-02T03:04:05.678Z"),
     createClient: (opts) =>
       new BundeswahlClient({ ...opts, transport, sleep: async () => {}, ...(retryDelayMs === undefined ? {} : { retryDelayMs }) }),

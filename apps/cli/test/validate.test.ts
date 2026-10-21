@@ -41,7 +41,8 @@ test("run() maps a BundeswahlValidationError raised during an action to exit 2 a
   const err: string[] = [];
   const deps: CliDeps = {
     ...defaultDeps,
-    io: { out: () => {}, err: (s) => err.push(s), writeFile: () => {} },
+    io: { out: () => {}, err: (s) => err.push(s) },
+    files: { state: () => "absent", write: () => {} },
     createClient: () => {
       throw new BundeswahlValidationError("Invalid thing: Expected something else.");
     },

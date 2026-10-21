@@ -20,8 +20,8 @@ bundeswahl [global options] <command> [command options]
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
-| `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout) |
-| `-f, --force` | with `--output`, overwrite the file if it already exists (without it, an existing file is never overwritten) |
+| `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout). Checked before any request: an existing file (a dangling link too) without `--force`, and a directory, are usage errors (exit 2). The write is atomic (a temporary file beside the target, renamed over it), so a failed write leaves the old file as it was and no half-written file (exit 1) |
+| `-f, --force` | with `--output`, overwrite the file if it already exists (its mode is kept; a symlink is written through); without `--output` a usage error |
 | `-V, --version` / `-h, --help` | version / help |
 
 Every option that takes a value is given once: a second `--timeout`, `--base-url` or

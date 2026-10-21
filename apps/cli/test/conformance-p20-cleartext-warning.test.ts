@@ -34,7 +34,8 @@ function makeDeps(out: string[], err: string[], _env: Record<string, string>): C
     body: Buffer.from(okBody),
   });
   return {
-    io: { out: (s) => out.push(s), err: (s) => err.push(s), writeFile: () => {} },
+    io: { out: (s) => out.push(s), err: (s) => err.push(s) },
+    files: { state: () => "absent", write: () => {} },
     createClient: (opts) => new Client({ ...opts, transport }),
   };
 }

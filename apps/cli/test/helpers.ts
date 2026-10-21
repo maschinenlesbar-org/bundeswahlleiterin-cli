@@ -62,7 +62,10 @@ export async function parity(
       ...defaultDeps.io,
       out: (s) => out.push(s),
       err: (s) => err.push(s),
-      writeFile: () => {
+    },
+    files: {
+      state: () => "absent",
+      write: () => {
         throw new Error("parity(): the CLI must not write files here");
       },
     },

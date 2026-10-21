@@ -295,7 +295,7 @@ packages/client/src/
     client.ts    # BundeswahlClient — results/parties/wahlkreise/structure (+ BTW2025 paths)
     index.ts     # the client's public surface (the library entry re-exports it)
 apps/cli/src/cli/
-    io.ts        # injectable I/O seam (stdout/stderr/file), the logger and the clock
+    io.ts        # injectable I/O seam (stdout/stderr, the -o file: OutputFiles/nodeFiles), the logger and the clock
     log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     shared.ts    # option parsers, global-option resolver, JSON renderer
     commands/    # datasets.ts — one command per dataset
@@ -399,8 +399,8 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   test can assert both give the same outcome.
 - **`io.test.ts`** — `handleOutputErrors()` and `stderrAfterStdout` with fake streams: a
   reader that has gone (EPIPE, ENOTCONN), any other stdout write error as an ERROR record
-  of `bundeswahl.output`, a record held behind stdout's backlog; and `defaultIO.writeFile`
-  onto a directory.
+  of `bundeswahl.output`, a record held behind stdout's backlog; and `nodeFiles` refusing a
+  directory and, without `--force`, an existing file.
 - **`conformance-p*.test.ts`** — the shared conformance tests of the 2026-10-05 fix plan,
   copied from the sibling repos with only their adapter block changed: P1 CLI redaction,
   P2 library redaction, P4/P19 base-URL validation (the P19 case is skipped: no environment
@@ -482,8 +482,15 @@ code point and ends in `… (N more characters)`. The areas are `cli` (usage err
 data host's answers: an error status, the hint after a 3xx, and a malformed answer, a
 `BundeswahlParseError`: an HTML page instead of the CSV file, a file without the expected
 header, cut off, compressed, empty or in an unknown charset), `http` (the connection, the size-cap hint, the cleartext warning) and
-`output` (`Wrote N bytes` after `-o`, or any failure to write that file, the refusal to
-overwrite one included: an `OutputError`, and a stdout write error). Code logs through `logOf(deps)` and never writes
+`output` (`Wrote N bytes` after `-o`, or any failure to write that file: an `OutputError`, and a
+stdout write error). A refused `-o` target — `--force` without `-o`, a directory, an existing
+file without `--force` — is checked before any request (`checkOutputTarget`) and is a usage
+error of `cli` (exit 2); a file that appears during the request is still refused at the
+write, as an `output` record (exit 1). The file seam (`CliDeps.files`, `OutputFiles`; the real
+one is `nodeFiles` in `io.ts`) writes atomically: a temporary file beside the target, created
+exclusively and renamed over it, so a failed write leaves the old file and no temporary one;
+without `--force` the name is claimed first with an exclusive create, and removed again if the
+write fails; `--force` keeps the old file's mode and writes through a symlink. Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
 parses it (`logFormatFromArgv`, which skips the value of one of the program's own value options, as
 commander does, and is used only for the records of a parse error; a `preAction` hook
