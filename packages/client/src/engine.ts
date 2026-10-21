@@ -238,7 +238,7 @@ export function isBidiControl(code: number): boolean {
  *   space and the ends are trimmed, so the text stays on one line.
  *
  * The CLI's JSON output is escaped separately (escapeControlChars in
- * cli/shared.ts): JSON.stringify alone leaves DEL and the C1 range raw. Written as
+ * cli/shared.ts): JSON.stringify alone leaves DEL, the C1 range and the bidi controls raw. Written as
  * a code-point filter so the source file stays free of raw control bytes.
  */
 export function sanitizeServerText(text: string): string {

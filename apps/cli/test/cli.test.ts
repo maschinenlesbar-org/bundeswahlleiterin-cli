@@ -128,6 +128,22 @@ test("DEL and C1 control characters in server data are escaped in the JSON outpu
   }
 });
 
+test("bidi formatting characters in server data are escaped in the JSON output", async () => {
+  // An override (U+202E) or isolate in a party name reorders what the terminal shows.
+  const bidi = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069";
+  const csv =
+    `Gruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n4;PARTEI;Partei;Rat${bidi};Rat\n` +
+    "28;UEBRIGE;System-Gruppe;Übrige;Übrige\n";
+  for (const format of [[], ["--compact"]]) {
+    const cli = makeCli(() => csvResponse(csv));
+    assert.equal(await run([...format, "parties"], cli.deps), 0);
+    const text = cli.out.join("\n");
+    assert.doesNotMatch(text, /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/, format.join(" "));
+    assert.match(text, /Rat\\u061c\\u200e\\u200f\\u202a\\u202b\\u202c\\u202d\\u202e\\u2066\\u2067\\u2068\\u2069/);
+    assert.equal((JSON.parse(text) as Array<{ kurz: string }>)[0]?.kurz, `Rat${bidi}`);
+  }
+});
+
 test("--output writes to a file and keeps stdout clean", async () => {
   const cli = makeCli();
   await run(["--output", "/tmp/br_out.json", "parties"], cli.deps);

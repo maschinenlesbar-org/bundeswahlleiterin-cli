@@ -17,7 +17,7 @@ import { csvResponse, makeMockTransport, untimed } from "./helpers.js";
 
 /** Each dataset request answered with its fixture, by the file name in the URL. */
 function routeFixture(req: HttpRequest): HttpResponse {
-  if (req.url.includes("parteien")) return csvResponse(fx.partiesCsv.replace("Sozialdemokratische", "Ein \u001b[31mrotes\u009b"));
+  if (req.url.includes("parteien")) return csvResponse(fx.partiesCsv.replace("Sozialdemokratische", "Ein \u001b[31mrotes\u009b ‮"));
   if (req.url.includes("wahlkreisnamen")) return csvResponse(fx.wahlkreiseCsv);
   return csvResponse(fx.kerg2Csv);
 }
@@ -53,7 +53,7 @@ test("-o writes what stdout would show, plus a newline, and says so in an INFO r
     assert.equal(await run(["-o", path, "parties"], cli.deps), 0);
     const written = readFileSync(path, "utf8");
     assert.equal(written, `${shown.out.join("\n")}\n`);
-    assert.doesNotMatch(written, /[\u001b\u009b]/, "control characters are escaped in the file too");
+    assert.doesNotMatch(written, /[\u001b\u009b‮]/, "control characters are escaped in the file too");
     assert.deepEqual(cli.out, []);
     assert.deepEqual(cli.err, [`INFO  [bundeswahl.output] Wrote ${Buffer.byteLength(written)} bytes to ${path}`]);
     assert.deepEqual(readdirSync(dir), ["parties.json"], "no temporary file is left");

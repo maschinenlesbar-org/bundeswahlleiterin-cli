@@ -383,7 +383,8 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   retry, error mapping — mocked transport.
 - **`client.test.ts`** — per-dataset paths, CSV→typed mapping, and every filter —
   mocked transport.
-- **`cli.test.ts`** — command parsing, the `results` filters, `--output`, and exit
+- **`cli.test.ts`** — command parsing, the `results` filters, the JSON output (DEL, C1 and
+  the bidi controls escaped), `--output`, and exit
   codes — mocked client.
 - **`output.test.ts`** — the renderer: an answer nested too deeply to pretty-print is an
   `OutputError` that suggests `--compact` (an ERROR record of `bundeswahl.output`, exit 1),
