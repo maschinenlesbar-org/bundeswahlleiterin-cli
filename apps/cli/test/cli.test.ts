@@ -392,6 +392,20 @@ test("-o with a blank path is a usage error; -o - writes to stdout, not a file n
   assert.doesNotMatch(cli.err.join("\n"), /Wrote/);
 });
 
+test("-o refuses the next option as its file name, before any request; ./-name writes a dash-leading file", async () => {
+  for (const argv of [["parties", "-o", "--compact"], ["--output=-v", "parties"], ["-o", "-f", "parties"]]) {
+    const cli = makeCli();
+    assert.equal(await run(argv, cli.deps), 2, argv.join(" "));
+    assert.equal(cli.mt.calls.length, 0, argv.join(" "));
+    assert.deepEqual(cli.files, {}, argv.join(" "));
+    assert.match(cli.err.join("\n"), /looks like a missing value — "-[-a-z]+" is the next option/, argv.join(" "));
+    assert.match(cli.err.join("\n"), /\.\/-name/, argv.join(" "));
+  }
+  const cli = makeCli();
+  assert.equal(await run(["-o", "./-v.json", "parties"], cli.deps), 0);
+  assert.deepEqual(Object.keys(cli.files), ["./-v.json"]);
+});
+
 test("a --user-agent with control or non-Latin-1 characters is a usage error, no request", async () => {
   for (const [ua, message] of [
     ["€-agent", /outside Latin-1/],
@@ -519,9 +533,11 @@ test("the log format is the one commander parsed, where an option's value looks 
   const back = makeCli(notFound);
   assert.equal(await run(["--log-format", "jsonl", "--user-agent", "--log-format", "parties"], back.deps), 4);
   assert.ok(back.err.length === 1 && isJsonl(back.err[0] as string), back.err.join("\n"));
+  // -o refuses a dash-leading value (the next option): that usage error is jsonl too.
   const output = makeCli();
-  assert.equal(await run(["--log-format", "jsonl", "-o", "--log-format", "parties"], output.deps), 0);
-  assert.ok(output.err.length === 1 && isJsonl(output.err[0] as string), output.err.join("\n"));
+  assert.equal(await run(["--log-format", "jsonl", "-o", "--log-format", "parties"], output.deps), 2);
+  assert.ok(output.err.length > 0 && output.err.every(isJsonl), output.err.join("\n"));
+  assert.deepEqual(output.files, {});
   // A parse error after such a value is logged in the format commander would have used.
   const parse = makeCli();
   assert.equal(await run(["--user-agent", "--log-format", "jsonl", "parties"], parse.deps), 2);

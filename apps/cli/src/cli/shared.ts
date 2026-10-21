@@ -106,9 +106,21 @@ export function parseTextArg(value: string): string {
  * is a usage error: `-o ""` used to print to stdout silently and `-o " "` created a
  * file named " ". `-` is kept as is and means stdout (see {@link renderJson}), the
  * usual convention, rather than a file named "-".
+ *
+ * Any other dash-leading value is refused as the next option, as the filters refuse it
+ * (`parseTextArg`): `bundeswahl parties -o --compact` wrote a pretty-printed file named
+ * "--compact" with exit 0. commander hands the parser the same string for `-o -x` and
+ * `--output=-x`, so a file whose name starts with a dash is written as `./-x`.
  */
 export function parseOutputPath(value: string): string {
-  return parseNonEmpty(value);
+  parseNonEmpty(value);
+  if (value !== "-" && value.startsWith("-")) {
+    throw new InvalidArgumentError(
+      `looks like a missing value — ${describeValue(value)} is the next option, consumed because ` +
+        "this one was left without a value. For a file whose name starts with a dash, write ./-name.",
+    );
+  }
+  return value;
 }
 
 /**
