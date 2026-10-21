@@ -382,6 +382,11 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   mocked transport.
 - **`cli.test.ts`** — command parsing, the `results` filters, `--output`, and exit
   codes — mocked client.
+- **`output.test.ts`** — the renderer: an answer nested too deeply to pretty-print is an
+  `OutputError` that suggests `--compact` (an ERROR record of `bundeswahl.output`, exit 1),
+  and `--compact` takes V8's fast path unless the answer holds a string or key of 64 Mi
+  characters or more (on Node 26 the fast path aborts the process on a string of ~250 MB);
+  plus `-o`.
 - **`log.test.ts`** — the record helpers of `apps/cli/src/cli/log.ts` on their own
   (`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
   P23's.
