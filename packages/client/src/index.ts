@@ -35,7 +35,7 @@ export {
   redactCredentials,
 } from "./errors.js";
 
-export { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, knownKeysProblem } from "./validate.js";
+export { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, knownKeysProblem, textProblem } from "./validate.js";
 export type { Problem } from "./validate.js";
 
 export * from "./types.js";

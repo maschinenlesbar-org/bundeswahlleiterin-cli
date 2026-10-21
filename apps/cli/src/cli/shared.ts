@@ -7,7 +7,7 @@ import { OutputError, isDirectoryMessage, logOf, nodeFiles, refuseOverwrite, typ
 import type { BundeswahlClientOptions } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { BundeswahlValidationError, quoteValue } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
 import { cleartextProblem, DEFAULT_BASE_URL, isBidiControl, type RetryEvent } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/engine";
-import { baseUrlProblem, headerValueProblem } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/validate";
+import { baseUrlProblem, headerValueProblem, textProblem } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/validate";
 
 /**
  * commander value-parser: a plain base-10 non-negative integer.
@@ -72,7 +72,8 @@ export function forbidRepeatedOptions(command: Command): void {
 /**
  * commander value-parser for a free-text filter.
  *
- * Non-empty, and — the point of it — rejects a value that is really the *next
+ * The library's `textProblem` (not blank, not only invisible characters, no control, format
+ * or half character), and — the point of it — rejects a value that is really the *next
  * option*. Without this, `--party --group-type` makes commander hand "--group-type"
  * to `--party` as its value; the starved option is never applied and the filter
  * matches nothing, so the user gets `[]` and exit 0. For election data an empty
@@ -89,9 +90,9 @@ export function forbidRepeatedOptions(command: Command): void {
  * record huge twice and a zero-width space can't hide.
  */
 export function parseTextArg(value: string): string {
-  if (value.trim() === "") {
-    throw new InvalidArgumentError("Expected a non-empty value.");
-  }
+  // The library's rule (blank, invisible-only, a control, format or half character).
+  const problem = textProblem(value);
+  if (problem !== undefined) throw new InvalidArgumentError(problem);
   if (/^--?[^\s]/.test(value)) {
     throw new InvalidArgumentError(
       `looks like a missing value — ${quoteValue(value)} is the next option, consumed because ` +

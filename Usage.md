@@ -83,6 +83,13 @@ bundeswahl results --area-type Bund --group-type System-Gruppe \
 > `"Flensburg - Schleswig"` finds `Flensburg – Schleswig`. `--vote` accepts `1`/`erst` and
 > `2`/`zweit`.
 >
+> A filter value that could only match nothing is a usage error (exit 2) before any request,
+> in the CLI and the library alike: blank, only invisible characters (a zero-width space, a
+> soft hyphen) or combining marks, or a value with a control character, a format character
+> (a zero-width space, a bidi control; ZWJ and ZWNJ are allowed) or half of a character. The
+> message shows such a character escaped (`"SPD\u200b" contains an invisible character
+> (U+200B).`).
+>
 > `anzahl`/`prozent` are `null` for parties without a candidate or list in the area —
 > drop them before `sort_by(-.anzahl)`, which otherwise fails. `gewaehlt` names the party
 > whose Wahlkreis candidate was elected; it is `–` where the Erststimme winner's seat
@@ -168,7 +175,7 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
 |---|---|
 | `0` | success (help/version included); an empty filter also exits 0, and so does a reader that stops early (`\| head`), quietly |
 | `1` | a runtime error — including a failed `-o` write, a non-CSV response (an HTML page instead of the file), a file whose format changed (a missing column, an area level other than Bund/Land/Wahlkreis, a malformed, ambiguous or too long number) and an incomplete file (cut short, or only a header) |
-| `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, an option given twice, a refused `-o` target: an existing file without `--force`, a directory, `--force` without `-o`) |
+| `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, a filter value that can only match nothing, an option given twice, a refused `-o` target: an existing file without `--force`, a directory, `--force` without `-o`) |
 | `4` | HTTP 404 (a data file moved) |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap); the record names the request: `GET <url> failed: <reason>` |
 

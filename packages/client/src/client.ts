@@ -19,7 +19,7 @@ import {
   type ParsedCsv,
 } from "./csv.js";
 import { BundeswahlParseError, BundeswahlValidationError, cutForMessage, describeValue } from "./errors.js";
-import { assertValid, knownKeysProblem } from "./validate.js";
+import { assertValid, knownKeysProblem, textProblem } from "./validate.js";
 import type {
   AreaType,
   Party,
@@ -81,18 +81,18 @@ const WAHLKREISE_KEYS = ["land"] as const;
 const STRUCTURE_KEYS = ["wahlkreis", "includeAggregates"] as const;
 
 /**
- * Library-side validation of a text filter, matching the CLI's parse-time rule: a
- * blank value would match every row (an empty substring), so it is refused rather
- * than read as "no filter". Throws BundeswahlValidationError; no request is made.
+ * Library-side validation of a text filter, the CLI's parse-time rule (`textProblem`): a
+ * blank value would match every row (an empty substring), so it is refused rather than
+ * read as "no filter"; a value of only invisible characters, or with a control, format or
+ * half character, could only match nothing. Throws BundeswahlValidationError; no request
+ * is made.
  */
 function textFilter(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new BundeswahlValidationError(
-      `Invalid ${name}: expected a non-empty string, got ${describeValue(value)}.`,
-    );
+  if (typeof value !== "string") {
+    throw new BundeswahlValidationError(`Invalid ${name}: expected a non-empty string, got ${describeValue(value)}.`);
   }
-  return value;
+  return assertValid(name, value, textProblem);
 }
 
 /** True when the value is a plain run of digits (a bare area/Land number). */
