@@ -543,17 +543,26 @@ export class RequestEngine {
    * What the transport threw, as the error the engine raises. The default transport
    * rejects with `BundeswahlNetworkError` only; an injected one may throw anything (a
    * string, a `TypeError` from fetch). Every failure becomes a `BundeswahlNetworkError` —
-   * a `BundeswahlError` a caller and the CLI can rely on — with the base URL's credentials
-   * scrubbed from its message and cause chain; any other `BundeswahlError` passes through,
-   * and a clean network error stays as it is.
+   * a `BundeswahlError` a caller and the CLI can rely on — that names the request:
+   * `GET <url> failed: <reason>` (userinfo redacted; `(after N retries)` when there were
+   * some), since Node's own text (`Request timed out after 500ms`, `connect ECONNREFUSED
+   * 127.0.0.1:1`, `socket hang up`) says nothing about which call failed. The base URL's
+   * credentials are scrubbed from the reason and the cause chain, and the original stays
+   * the `cause`. Any other `BundeswahlError` passes through.
    */
-  private transportError(cause: unknown): BundeswahlError {
+  private transportError(cause: unknown, url: string, attempt: number): BundeswahlError {
     if (cause instanceof BundeswahlError && !(cause instanceof BundeswahlNetworkError)) return cause;
     const reason = cause instanceof Error ? cause.message : String(cause);
-    const message = cutForMessage(sanitizeServerText(this.scrub(reason)));
-    const scrubbed = this.scrubCause(cause);
-    if (cause instanceof BundeswahlNetworkError && message === cause.message && scrubbed === cause) return cause;
-    return new BundeswahlNetworkError(message, { cause: scrubbed });
+    const retried = attempt > 0 ? ` (after ${attempt} ${attempt === 1 ? "retry" : "retries"})` : "";
+    return new BundeswahlNetworkError(
+      `${this.describeRequest(url)} failed: ${cutForMessage(sanitizeServerText(this.scrub(reason)))}${retried}`,
+      { cause: this.scrubCause(cause) },
+    );
+  }
+
+  /** `GET <url>` for a message: the request URL with its userinfo redacted, cut. */
+  private describeRequest(url: string): string {
+    return `GET ${cutForMessage(redactUrl(url))}`;
   }
 
   /**
@@ -622,14 +631,16 @@ export class RequestEngine {
           await this.backOff(attempt, this.retryDelayMs * attempt, url);
           continue;
         }
-        throw this.transportError(cause);
+        throw this.transportError(cause, url, attempt);
       }
 
       // An injected transport may resolve with anything; a malformed HttpResponse would
       // otherwise surface below as a raw TypeError, outside the error contract.
       const invalid = responseProblem(response);
       if (invalid !== undefined) {
-        throw new BundeswahlNetworkError(`The transport returned an invalid response (${invalid}).`);
+        throw new BundeswahlNetworkError(
+          `${this.describeRequest(url)} failed: the transport returned an invalid response (${invalid}).`,
+        );
       }
       const status = response.status;
       const responseHeaders = plainHeaders(response.headers);
@@ -638,7 +649,7 @@ export class RequestEngine {
       // The size cap holds whatever the transport did: the default one aborts early, a custom
       // one may have read everything.
       if (this.maxResponseBytes > 0 && body.byteLength > this.maxResponseBytes) {
-        throw new BundeswahlNetworkError(sizeLimitMessage(this.maxResponseBytes));
+        throw new BundeswahlNetworkError(`${this.describeRequest(url)} failed: ${sizeLimitMessage(this.maxResponseBytes)}`);
       }
       const retryable = status === 429 || status === 503;
       const retryAfter = retryable ? parseRetryAfter(responseHeaders["retry-after"]) : undefined;

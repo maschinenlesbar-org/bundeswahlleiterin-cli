@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, validateBaseUrl } from "../src/engine.js";
-import { BundeswahlApiError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -389,6 +389,47 @@ test("credentials a server echoes are scrubbed from the error: Basic, user:passw
     for (const form of [basic, "alice:pa ss-pw", "pa ss-pw"]) assert.ok(!err.message.includes(form), err.message);
     assert.match(err.message, /no: Basic \*\*\* \/ \*\*\* \/ \*\*\*/);
     for (const form of [basic, "alice:pa ss-pw", "pa ss-pw"]) assert.ok(!err.body.includes(form), err.body);
+    return true;
+  });
+});
+
+test("a network failure names the request: GET <url> failed: <reason>, userinfo redacted, the original as cause (K3)", async () => {
+  const base = "https://user:secret@example.test";
+  const prefix = "GET https://***@example.test/x.csv failed: ";
+  const failures: Array<[string, () => unknown]> = [
+    ["a timeout of the transport", () => new BundeswahlNetworkError("Request timed out after 300ms")],
+    ["a refused connection", () => Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:1"), { code: "ECONNREFUSED" })],
+    ["a DNS failure", () => Object.assign(new Error("getaddrinfo ENOTFOUND example.test"), { code: "ENOTFOUND" })],
+    ["a reset", () => Object.assign(new Error("socket hang up"), { code: "ECONNRESET" })],
+  ];
+  for (const [what, make] of failures) {
+    const thrown = make();
+    const e = new RequestEngine({ baseUrl: base, maxRetries: 0, transport: async () => { throw thrown; } });
+    await assert.rejects(
+      () => e.getText("/x.csv"),
+      (err: unknown) => {
+        assert.ok(err instanceof BundeswahlNetworkError, what);
+        assert.ok(err.message.startsWith(prefix), `${what}: ${err.message}`);
+        assert.ok(!err.message.includes("secret"), what);
+        assert.match(err.message, new RegExp(`failed: ${(thrown as Error).message}$`), what);
+        assert.equal(err.cause, thrown, `${what}: the original is the cause`);
+        return true;
+      },
+    );
+  }
+  // The engine's own deadline, for a transport that never answers.
+  const slow = new RequestEngine({ baseUrl: base, timeoutMs: 5, transport: () => new Promise(() => {}) });
+  await assert.rejects(() => slow.getText("/x.csv"), (err: unknown) => {
+    assert.ok(err instanceof BundeswahlNetworkError);
+    assert.equal(err.message, `${prefix}Request exceeded the 5ms deadline`);
+    assert.ok(err.cause instanceof BundeswahlNetworkError);
+    return true;
+  });
+  // The size cap, for a transport that read the whole body.
+  const big = new RequestEngine({ baseUrl: base, maxResponseBytes: 4, transport: async () => csvResponse("a;b\n1;2\n") });
+  await assert.rejects(() => big.getText("/x.csv"), (err: unknown) => {
+    assert.ok(err instanceof BundeswahlNetworkError);
+    assert.match(err.message, /^GET https:\/\/\*\*\*@example\.test\/x\.csv failed: Response exceeded the size limit of 4 bytes/);
     return true;
   });
 });

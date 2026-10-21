@@ -165,7 +165,7 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
 | `1` | a runtime error — including a non-CSV response (an HTML page instead of the file), a file whose format changed (a missing column, an area level other than Bund/Land/Wahlkreis, a malformed or ambiguous number) and an incomplete file (cut short, or only a header) |
 | `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, a filter option given twice) |
 | `4` | HTTP 404 (a data file moved) |
-| `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
+| `6` | network / transport failure (DNS, connection, timeout, response size-cap); the record names the request: `GET <url> failed: <reason>` |
 
 A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps its own.
 

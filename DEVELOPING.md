@@ -315,7 +315,10 @@ calling `process.exit`).
 
 [`errors.ts`](packages/client/src/errors.ts): `BundeswahlApiError` (non-2xx, carries
 `status`/`detail`, with `isRetryable`/`isNotFound`), `BundeswahlNetworkError`
-(transport failure/timeout), `BundeswahlParseError` (the body was not CSV — usually
+(transport failure/timeout; its message names the request, `GET <url> failed: <reason>` with
+the userinfo redacted and `(after N retries)` when there were some, for a timeout, the size
+cap, a refused connection, a DNS failure and a reset alike, and the original error is its
+`cause`), `BundeswahlParseError` (the body was not CSV — usually
 an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
 before any request: a base URL that is blank, has surrounding whitespace, is not http(s)
 or has a query/fragment, a numeric
