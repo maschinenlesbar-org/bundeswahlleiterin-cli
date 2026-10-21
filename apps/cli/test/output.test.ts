@@ -169,16 +169,44 @@ function makeDeps(): { deps: CliDeps; out: string[] } {
   return { deps, out };
 }
 
-test("pretty-printing an answer nested too deeply is a clean error that suggests --compact (K4)", () => {
-  // The CSV datasets are flat rows; this guards the renderer itself, as every *-cli does.
+test("an answer nested too deeply is a clean error; it suggests --compact only where --compact prints it (D7)", () => {
+  // The CSV datasets are flat rows; this guards the renderer itself, as every *-cli does. Whether
+  // the compact printer survives the depth depends on the Node version (iterative from Node 26)
+  // and the stack: probed here, never assumed.
   let deep: unknown = [];
   for (let i = 0; i < 200_000; i++) deep = [deep];
+  let compactPrints = true;
+  try {
+    JSON.stringify(deep);
+  } catch {
+    compactPrints = false;
+  }
   const { deps, out } = makeDeps();
   assert.throws(
     () => renderJson(deps, {}, deep),
-    (err: unknown) => err instanceof OutputError && err.message === "The answer is nested too deeply to pretty-print; try --compact.",
+    (err: unknown) =>
+      err instanceof OutputError && err.message === `The answer is nested too deeply to pretty-print${compactPrints ? "; try --compact" : ""}.`,
   );
   assert.deepEqual(out, []);
+  if (compactPrints) renderJson(deps, { compact: true }, deep);
+  else assert.throws(() => renderJson(deps, { compact: true }, deep), (err: Error) => err.message === "The answer is nested too deeply to print.");
+});
+
+test("an answer too large to print is called too large, not too deep; the hint only where --compact prints (D7)", (t) => {
+  const { deps } = makeDeps();
+  const real = JSON.stringify;
+  // V8's own error for a text past its longest string, stood in for: a real one needs 512 MB.
+  const tooLarge = (gap: unknown): boolean => gap === 2 || gap === "big";
+  t.mock.method(JSON, "stringify", (value: unknown, replacer: never, gap: unknown) => {
+    if (tooLarge(gap) || (gap === undefined && (value as { all?: boolean }).all === true)) throw new RangeError("Invalid string length");
+    return real(value, replacer, gap as number);
+  });
+  assert.throws(() => renderJson(deps, {}, { id: "a1" }), (err: Error) =>
+    /^The answer is too large \(more than \d+ characters of JSON\) to pretty-print; try --compact\.$/.test(err.message));
+  assert.throws(() => renderJson(deps, {}, { all: true }), (err: Error) =>
+    /^The answer is too large \(more than \d+ characters of JSON\) to pretty-print\.$/.test(err.message));
+  assert.throws(() => renderJson(deps, { compact: true }, { all: true }), (err: Error) =>
+    /^The answer is too large \(more than \d+ characters of JSON\) to print\.$/.test(err.message));
 });
 
 test("--compact takes the gap path only for an answer holding a huge string, the fast path otherwise", (t) => {

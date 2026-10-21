@@ -406,11 +406,13 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
 - **`cli.test.ts`** — command parsing, the `results` filters, the JSON output (DEL, C1 and
   the bidi controls escaped), `--output`, and exit
   codes — mocked client.
-- **`output.test.ts`** — the renderer: an answer nested too deeply to pretty-print is an
-  `OutputError` that suggests `--compact` (an ERROR record of `bundeswahl.output`, exit 1),
-  and `--compact` takes V8's fast path unless the answer holds a string or key of 64 Mi
-  characters or more (on Node 26 the fast path aborts the process on a string of ~250 MB);
-  plus `-o`.
+- **`output.test.ts`** — the renderer: an answer nested too deeply, or too large for V8's
+  longest string, is an `OutputError` that names that cause (an ERROR record of
+  `bundeswahl.output`, exit 1), and suggests `--compact` only where `--compact` prints this very
+  answer (probed: compact output survives deep nesting on Node 26, not on 22 or 24); `--compact`
+  takes V8's fast path unless the answer holds a string or key of 64 Mi characters or more (on
+  Node 26 the fast path aborts the process on a string of ~250 MB), found by an iterative scan
+  without an allocation per value; terminal controls are escaped in 64 Ki chunks; plus `-o`.
 - **`log.test.ts`** — the record helpers of `apps/cli/src/cli/log.ts` on their own
   (`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
   P23's.
