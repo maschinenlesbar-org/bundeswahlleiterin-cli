@@ -439,7 +439,10 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   `parity.test.ts`), P25 the response corpus (only its empty-answer and malformed-answer cases run, each
   checking that the error names the request: the number and big-integer cases are for JSON
   answers, and this API has none), P26 `-o` integrity (runs the built
-  bin under `ulimit -f`: a write cut short leaves the old file and no temporary one). The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  bin: under `ulimit -f` a write cut short leaves the old file and no temporary one; a missing
+  directory is refused before any request; `/dev/null`, a FIFO and `/dev/stdout` are written in
+  place; `--force` through a dangling link creates its target; a 255-byte name is written; a
+  signal during the request or the write leaves no claim and no temporary file). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
 ## Continuous integration
@@ -514,13 +517,19 @@ header, cut off, compressed, empty or in an unknown charset; and the WARN of `on
 bytes that are not valid in the charset were replaced with U+FFFD), `http` (the connection, the size-cap hint, the cleartext warning) and
 `output` (`Wrote N bytes` after `-o`, or any failure to write that file: an `OutputError`, and a
 stdout write error). A refused `-o` target — `--force` without `-o`, a directory, an existing
-file without `--force` — is checked before any request (`checkOutputTarget`) and is a usage
-error of `cli` (exit 2); a file that appears during the request is still refused at the
-write, as an `output` record (exit 1). The file seam (`CliDeps.files`, `OutputFiles`; the real
-one is `nodeFiles` in `io.ts`) writes atomically: a temporary file beside the target, created
-exclusively and renamed over it, so a failed write leaves the old file and no temporary one;
-without `--force` the name is claimed first with an exclusive create, and removed again if the
-write fails; `--force` keeps the old file's mode and writes through a symlink. Code logs through `logOf(deps)` and never writes
+file without `--force`, a file whose directory is missing, not a directory or not writable, a
+link loop with `--force` — is checked before any request (`checkOutputTarget`,
+`OutputFiles.parentProblem`) and is a usage error of `cli` (exit 2); a file that appears during
+the request is still refused at the write, as an `output` record (exit 1). The file seam
+(`CliDeps.files`, `OutputFiles`; the real one is `nodeFiles` in `io.ts`) writes atomically: a
+temporary file beside the target (named within NAME_MAX), created exclusively and renamed over
+it, so a failed write leaves the old file and no temporary one; without `--force` the name is
+claimed first with an exclusive create, and removed again if the write fails; `--force` keeps
+the old file's mode and writes through a symlink, also a dangling one, whose target is created
+(`linkTarget`). SIGINT, SIGTERM and SIGHUP during a file write remove the claim and the
+temporary file and exit `130`, `143`, `129`. A stream (`nodeFiles.state` → `"stream"`: a
+character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place, with no
+claim, no rename and no `--force` needed. Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
 parses it (`logFormatFromArgv`, which skips the value of one of the program's own value options, as
 commander does, and is used only for the records of a parse error; a `preAction` hook

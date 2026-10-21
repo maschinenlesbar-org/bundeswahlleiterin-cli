@@ -28,7 +28,7 @@ const serialize = (body: unknown): string => String(body);
 function makeDeps(out: string[], err: string[], _env: Record<string, string>, transport: Transport): CliDeps {
   return {
     io: { out: (s) => out.push(s), err: (s) => err.push(s) },
-    files: { state: () => "absent", write: () => {} },
+    files: { state: () => "absent", parentProblem: () => undefined, write: () => {} },
     createClient: (opts) => new Client({ ...opts, transport }),
   };
 }

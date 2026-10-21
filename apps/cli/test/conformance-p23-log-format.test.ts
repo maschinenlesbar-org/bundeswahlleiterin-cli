@@ -73,7 +73,7 @@ function makeDeps(out: string[], err: string[], now: () => Date, answer?: HttpRe
   };
   return {
     io: { out: (s) => out.push(s), err: (s) => err.push(s) },
-    files: { state: () => "absent", write: () => {} },
+    files: { state: () => "absent", parentProblem: () => undefined, write: () => {} },
     now,
     createClient: (opts) => new Client({ ...opts, transport }),
   };

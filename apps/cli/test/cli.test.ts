@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { run } from "../src/cli/run.js";
 import { forbidRepeatedOptions } from "../src/cli/shared.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
-import { refuseOverwrite, type CliDeps } from "../src/cli/io.js";
+import { nodeFiles, refuseOverwrite, type CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
 import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
 import * as fx from "@maschinenlesbar.org/bundeswahlleiterin-client/test/fixtures";
@@ -30,6 +30,7 @@ function makeCli(responder: (req: HttpRequest) => HttpResponse = routeFixture) {
     // In memory, with the real seam's rules: without --force an existing file is refused.
     files: {
       state: (p) => (files[p] !== undefined ? "exists" : "absent"),
+      parentProblem: () => undefined,
       write: (p, d, overwrite) => {
         if (!overwrite && files[p] !== undefined) throw new Error(refuseOverwrite(p));
         files[p] = d;
@@ -194,6 +195,7 @@ test("a --output write failure reports a clean error (exit 1)", async () => {
     io: { out: () => {}, err: (s) => err.push(s) },
     files: {
       state: () => "absent",
+      parentProblem: () => undefined,
       write: () => {
         throw new Error('Could not write to "/tmp/x.json": EACCES: permission denied');
       },
@@ -571,6 +573,7 @@ test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", as
     const cli = makeCli();
     cli.deps.files = {
       state: () => "absent",
+      parentProblem: () => undefined,
       write: () => {
         throw thrown;
       },
@@ -584,7 +587,9 @@ test("every -o failure is an ERROR record of bundeswahl.output, exit 1 (L8)", as
 test("the -o failure drops Node's \", open '<path>'\" tail also when the path holds a line break", async () => {
   for (const path of ["/nonexistent\nZZ/x", "/nonexistent\rZZ/x", "/nonexistent/x"]) {
     const cli = makeCli();
-    delete cli.deps.files; // the real file system: the directory doesn't exist
+    // The real file system, past the check before the request (a missing directory is a usage
+    // error there): the write itself fails, as when the directory goes away during the request.
+    cli.deps.files = { ...nodeFiles, parentProblem: () => undefined };
     assert.equal(await run(["-o", path, "parties"], cli.deps), 1);
     assert.equal(cli.err.length, 1, cli.err.join("\n"));
     const msg = untimed(cli.err[0] as string);

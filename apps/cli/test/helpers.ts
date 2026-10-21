@@ -65,6 +65,7 @@ export async function parity(
     },
     files: {
       state: () => "absent",
+      parentProblem: () => undefined,
       write: () => {
         throw new Error("parity(): the CLI must not write files here");
       },

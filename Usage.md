@@ -20,8 +20,8 @@ bundeswahl [global options] <command> [command options]
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `--log-format <format>` | How errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [bundeswahl.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
-| `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout; any other value starting with a dash is refused as the next option, so write a file named `-x` as `./-x`). Checked before any request: an existing file (a dangling link too) without `--force`, and a directory, are usage errors (exit 2). The write is atomic (a temporary file beside the target, renamed over it), so a failed write leaves the old file as it was and no half-written file (exit 1) |
-| `-f, --force` | with `--output`, overwrite the file if it already exists (its mode is kept; a symlink is written through); without `--output` a usage error |
+| `-o, --output <file>` | write output to a file instead of stdout (`-` = stdout; any other value starting with a dash is refused as the next option, so write a file named `-x` as `./-x`). Checked before any request: an existing file (a dangling link too) without `--force`, a directory, and a file whose directory is missing or not writable are usage errors (exit 2). The file is replaced only once complete, so a failed write (exit 1) or an interrupted one (Ctrl-C: exit 130) leaves the old file as it was and no half-written or temporary file. A device, a FIFO or `/dev/stdout` is written in place, without `--force` |
+| `-f, --force` | with `--output`, overwrite the file if it already exists (its mode is kept; a symlink is written through, and the file it names is created if the link dangles); without `--output` a usage error |
 | `-V, --version` / `-h, --help` | version / help |
 
 Every option that takes a value is given once: a second `--timeout`, `--base-url` or
@@ -175,7 +175,7 @@ bundeswahl results --area-type Wahlkreis --vote 1 --group-type Partei \
 |---|---|
 | `0` | success (help/version included); an empty filter also exits 0, and so does a reader that stops early (`\| head`), quietly |
 | `1` | a runtime error — including a failed `-o` write, a non-CSV response (an HTML page instead of the file), a file whose format changed (a missing column, an area level other than Bund/Land/Wahlkreis, a malformed, ambiguous or too long number) and an incomplete file (cut short, or only a header) |
-| `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, a filter value that can only match nothing, an option given twice, a refused `-o` target: an existing file without `--force`, a directory, `--force` without `-o`) |
+| `2` | usage error (bad flag, unknown command, bad `--base-url`, bad `--area-type`/`--vote`, a filter value that can only match nothing, an option given twice, a refused `-o` target: an existing file without `--force`, a directory, a missing or read-only directory, `--force` without `-o`) |
 | `4` | HTTP 404 (a data file moved) |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap); the record names the request: `GET <url> failed: <reason>` |
 
