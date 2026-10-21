@@ -371,7 +371,10 @@ charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
 Repeated options are refused by one rule, `forbidRepeatedOptions` (`shared.ts`), which
 `buildProgram` applies to the whole command tree: a single-value option given twice is
-`--x may be given only once.` (exit 2, no request); flags may repeat.
+`--x may be given only once.` (exit 2, no request); flags may repeat. A boolean that can be
+switched both ways (an optional-value `--x [bool]`, or a `--x`/`--no-x` pair; none in this CLI
+today) is counted per attribute from commander's `option:<name>` events, so `--x false --x` is
+refused too.
 
 ## Testing
 

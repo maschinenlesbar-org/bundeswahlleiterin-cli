@@ -49,14 +49,31 @@ export function parseNonEmpty(value: string): string {
  * Make giving a single-value option twice a usage error, on `command` and every subcommand:
  * commander keeps the last value silently, so `--party SPD --party CDU` returned only CDU and
  * `--timeout 1000 --timeout 0` switched the timeout off, with nothing telling the user a value
- * was dropped. The message is `--x may be given only once.` (exit 2, before any request).
- * Flags without a value are left alone, and so is a repeatable option, declared the commander
- * way with an array default (`.option("--tag <t>", …, collect, [])`; this CLI has none). Call it
- * once on a freshly built program: the check counts per Option object.
+ * was dropped. The message is `--x may be given only once.` (exit 2, before any request). A
+ * repeatable option, declared the commander way with an array default (`.option("--tag <t>", …,
+ * collect, [])`; this CLI has none), is left alone; so is a plain flag (`--compact --compact`
+ * means the same).
+ *
+ * A boolean that can be switched both ways is guarded too: an optional-value option
+ * (`--is-open [bool]`) and a negatable pair (`--x` / `--no-x`); this CLI has none today. commander
+ * calls no value parser for a bare `--is-open`, so `--is-open false --is-open` turned into true
+ * silently. Those are counted per attribute from commander's `option:<name>` events, which fire
+ * for every occurrence. Call it once on a freshly built program: the check counts per program.
  */
 export function forbidRepeatedOptions(command: Command): void {
+  const switches = new Set(command.options.filter((o) => o.negate || o.optional).map((o) => o.attributeName()));
+  const seen = new Set<string>();
   for (const option of command.options) {
-    if ((!option.required && !option.optional) || option.variadic || Array.isArray(option.defaultValue)) continue;
+    const attribute = option.attributeName();
+    if (switches.has(attribute)) {
+      const names = command.options.filter((o) => o.attributeName() === attribute).map((o) => o.long ?? o.short);
+      command.on(`option:${option.name()}`, () => {
+        if (seen.has(attribute)) command.error(`error: ${names.join(" / ")} may be given only once.`, { code: "commander.optionRepeated" });
+        seen.add(attribute);
+      });
+      continue;
+    }
+    if (!option.required || option.variadic || Array.isArray(option.defaultValue)) continue;
     const parse = option.parseArg;
     let given = false;
     const guarded = (value: string, previous: unknown): unknown => {

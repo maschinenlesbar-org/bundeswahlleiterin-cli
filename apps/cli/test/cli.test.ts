@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { Command } from "commander";
 import { run } from "../src/cli/run.js";
+import { forbidRepeatedOptions } from "../src/cli/shared.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { refuseOverwrite, type CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
@@ -597,4 +599,47 @@ test("a subcommand's value option does not swallow the program's --log-format, i
   assert.notEqual(await run(["results", "--area", "--log-format", "jsonl"], cli.deps), 0);
   assert.ok(cli.err.length > 0 && cli.err.every((line) => line.startsWith("{")), cli.err.join("\n"));
   assert.match((JSON.parse(cli.err[0] ?? "") as Record<string, unknown>)["msg"] as string, /--area <nr-or-name>' argument missing/);
+});
+
+test("a boolean that can be switched both ways may be given only once: optional value, or --x / --no-x (T11)", async () => {
+  // commander calls no value parser for a bare `--is-open`, so `--is-open false --is-open` turned
+  // into true without a word (fragdenstaat-cli); `--x --no-x` keeps the last one the same way.
+  // This CLI has no such option today; the guard covers the next one.
+  const build = () => {
+    const program = new Command();
+    const seen: unknown[] = [];
+    program
+      .command("flags")
+      .option("--is-open [bool]", "optional value", (value: string) => value === "true")
+      .option("--cache", "negatable")
+      .option("--no-cache", "negatable")
+      .option("--archived", "plain flag")
+      .option("--name <n>", "required value")
+      .action((opts: Record<string, unknown>) => void seen.push(opts));
+    forbidRepeatedOptions(program);
+    for (const command of program.commands) command.exitOverride().configureOutput({ writeErr: () => {}, outputError: () => {} });
+    program.exitOverride();
+    return { program, seen };
+  };
+  for (const argv of [
+    ["--is-open", "false", "--is-open"],
+    ["--is-open", "--is-open", "false"],
+    ["--is-open", "--is-open"],
+    ["--cache", "--no-cache"],
+    ["--no-cache", "--no-cache"],
+    ["--name", "a", "--name", "b"],
+  ]) {
+    const { program, seen } = build();
+    await assert.rejects(program.parseAsync(["flags", ...argv], { from: "user" }), (err: Error) => /may be given only once/.test(err.message), argv.join(" "));
+    assert.deepEqual(seen, [], argv.join(" "));
+  }
+  for (const [argv, expected] of [
+    [["--is-open", "false"], { isOpen: false }],
+    [["--is-open"], { isOpen: true }],
+    [["--no-cache", "--archived", "--archived"], { cache: false, archived: true }],
+  ] as const) {
+    const { program, seen } = build();
+    await program.parseAsync(["flags", ...argv], { from: "user" });
+    assert.deepEqual(seen, [expected], argv.join(" "));
+  }
 });
