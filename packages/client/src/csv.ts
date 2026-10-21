@@ -84,21 +84,21 @@ export interface ParsedCsv {
 }
 
 export interface ParseCsvOptions {
-  delimiter?: string;
+  delimiter?: string | undefined;
   /**
    * Skip preamble rows until the header is found. If given, the header is the
    * first row whose first cell (trimmed) equals this value; otherwise the header
    * is the first non-empty row. Superseded by `headerColumns`, which finds the
    * header wherever its columns stand.
    */
-  headerFirstCell?: string;
+  headerFirstCell?: string | undefined;
   /**
    * Find the header by its column names, in any position: the header is the first row
    * whose cells (trimmed) include at least {@link headerMatchThreshold} of these names.
    * A row that misses a few (a renamed column) is still found, so the caller can name
    * the missing ones. Takes precedence over `headerFirstCell`.
    */
-  headerColumns?: readonly string[];
+  headerColumns?: readonly string[] | undefined;
 }
 
 /**

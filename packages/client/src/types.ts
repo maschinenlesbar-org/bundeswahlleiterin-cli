@@ -83,16 +83,16 @@ export type StructureRow = Record<string, string>;
 /** Filters for a results query (all optional; applied client-side after the fetch). */
 export interface ResultsQuery {
   /** Restrict to one area level. */
-  areaType?: AreaType;
+  areaType?: AreaType | undefined;
   /**
    * Match an area by number (leading zeros ignored) or case-insensitive name
    * substring. Land and Wahlkreis numbers overlap, so combine with `areaType`.
    */
-  area?: string;
+  area?: string | undefined;
   /** Match a group/party by case-insensitive name substring. */
-  party?: string;
+  party?: string | undefined;
   /** Restrict to first (1) or second (2) votes. */
-  vote?: Vote;
+  vote?: Vote | undefined;
   /** Restrict to a `gruppenart` (e.g. "Partei"). */
-  groupType?: string;
+  groupType?: string | undefined;
 }

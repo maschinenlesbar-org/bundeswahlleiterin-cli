@@ -79,6 +79,12 @@ new BundeswahlClient({
 });
 ```
 
+Every client option, every filter of `results`, `wahlkreise` and `structure`, and every
+`parseCsv` option may be given as `undefined`, which means the same as leaving it out (the
+default). The types say so (`?: T | undefined`), so a consumer compiled with
+`exactOptionalPropertyTypes` can write `{ baseUrl: process.env.BUNDESWAHL_BASE_URL }`
+(`packages/client/test/types.test.ts` compiles such a consumer).
+
 `baseUrl` is checked in the constructor with `validateBaseUrl` (exported; the rules are
 `baseUrlProblem` in `validate.ts`, the same function the CLI's `--base-url` parser calls)
 on the raw value, before trailing slashes are stripped: a blank value, surrounding
@@ -362,7 +368,7 @@ node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 ```
 
 The client's tests are in `packages/client/test/` (`csv`, `query`, `http`, `engine`,
-`client`, `retry-hook`), with the transport helpers (`helpers.ts`, which
+`client`, `retry-hook`, `types`), with the transport helpers (`helpers.ts`, which
 `apps/cli/test/helpers.ts` re-exports next to the CLI's own helpers) and the canned
 datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
 

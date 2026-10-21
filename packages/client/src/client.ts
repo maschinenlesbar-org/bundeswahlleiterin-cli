@@ -417,7 +417,7 @@ export class BundeswahlClient {
   }
 
   /** The constituencies (Wahlkreise), optionally filtered by Land (name/abbr/number). */
-  async wahlkreise(opts: { land?: string } = {}): Promise<Wahlkreis[]> {
+  async wahlkreise(opts: { land?: string | undefined } = {}): Promise<Wahlkreis[]> {
     assertValid("options", opts, knownKeysProblem(WAHLKREISE_KEYS));
     const land = textFilter("land", opts.land);
     const text = await this.engine.getText(BTW2025.wahlkreise);
@@ -476,7 +476,7 @@ export class BundeswahlClient {
    * a sum double-counts — see the rows' own `Fußnoten`). Optionally filtered by
    * Wahlkreis number (leading zeros ignored) or name substring.
    */
-  async structure(opts: { wahlkreis?: string; includeAggregates?: boolean } = {}): Promise<StructureRow[]> {
+  async structure(opts: { wahlkreis?: string | undefined; includeAggregates?: boolean | undefined } = {}): Promise<StructureRow[]> {
     assertValid("options", opts, knownKeysProblem(STRUCTURE_KEYS));
     const wahlkreis = textFilter("wahlkreis", opts.wahlkreis);
     // Checked like every other option: a string "false" (from an env variable or a query

@@ -68,32 +68,32 @@ export interface EngineOptions {
    * Base URL of the data host. Defaults to https://www.bundeswahlleiterin.de when
    * omitted; checked by {@link validateBaseUrl}.
    */
-  baseUrl?: string;
+  baseUrl?: string | undefined;
   /**
    * Swappable transport. Defaults to the built-in node http/https transport. The engine
    * enforces `timeoutMs` and `maxResponseBytes` for any transport, reads its headers in any
    * case (a fetch `Headers` or a `Map` too) and its body as any ArrayBuffer view, and turns
    * whatever it throws into a `BundeswahlNetworkError`.
    */
-  transport?: Transport;
+  transport?: Transport | undefined;
   /**
    * Value of the User-Agent header. Only `undefined` selects the default; a blank
    * value, a C0 control other than tab (CR/LF included), DEL or a character above
    * U+00FF throws a BundeswahlValidationError (see {@link assertHeaderValue}).
    */
-  userAgent?: string;
+  userAgent?: string | undefined;
   /**
    * Extra headers sent on every request. Each name must be an HTTP token and each
    * value obeys the same rules as `userAgent`.
    */
-  defaultHeaders?: Record<string, string>;
+  defaultHeaders?: Record<string, string> | undefined;
   /**
    * Time limit per request in milliseconds, covering the whole response body, not
    * only idle gaps (0 disables; at most `MAX_TIMEOUT_MS`, 2^31 - 1 ms). Enforced by the
    * engine for every transport: the request's `signal` aborts at the deadline and the
    * call rejects with a BundeswahlNetworkError.
    */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   /**
    * Number of automatic retries for transient (429/503) responses and reset connections
    * (`ECONNRESET`, `EPIPE`, `ECONNABORTED`, undici's `UND_ERR_SOCKET`), 0..`MAX_RETRIES`
@@ -102,26 +102,26 @@ export interface EngineOptions {
    * to `MAX_RETRY_AFTER_MS`; a longer one is not retried, and the error names the requested
    * wait).
    */
-  maxRetries?: number;
+  maxRetries?: number | undefined;
   /**
    * Base backoff between retries in milliseconds (grows linearly; default 200). A
    * `Retry-After` can make a wait longer, never shorter. At most `MAX_RETRY_AFTER_MS`.
    */
-  retryDelayMs?: number;
+  retryDelayMs?: number | undefined;
   /**
    * Hard cap on response body size in bytes (defends against memory exhaustion
    * from a hostile/buggy endpoint). Defaults to 100 MiB; set to 0 for no limit. The
    * default transport aborts early; for any transport the engine checks the body it
    * gets back.
    */
-  maxResponseBytes?: number;
+  maxResponseBytes?: number | undefined;
   /** Injectable sleep, primarily for deterministic tests. */
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: ((ms: number) => Promise<void>) | undefined;
   /**
    * Called once per retry, right before the backoff sleep, for each retried 429/503
    * and reset connection; never when there is no retry. A throw is swallowed.
    */
-  onRetry?: (event: RetryEvent) => void;
+  onRetry?: ((event: RetryEvent) => void) | undefined;
 }
 
 /** What `EngineOptions.onRetry` is told about one retry. */
