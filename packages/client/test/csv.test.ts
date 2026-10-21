@@ -177,3 +177,15 @@ test("parseCsv with headerColumns finds the header by its names in any position"
   assert.equal(headerMatchThreshold(3), 2);
   assert.equal(headerMatchThreshold(1), 1);
 });
+
+test("parseCsvRows cuts fields out as slices: the same rows as before for quotes, escapes, CR, a long field", () => {
+  const long = "x".repeat(200_000);
+  assert.deepEqual(parseCsvRows(`a;"b;c""d"e;\r\nf\rg;"h\ni"\n${long};"${long}"`), [
+    ["a", 'b;c"de', ""],
+    ["fg", "h\ni"],
+    [long, long],
+  ]);
+  assert.deepEqual(parseCsvRows('""""'), [['"']]);
+  assert.deepEqual(parseCsvRows("a,b\n", ","), [["a", "b"]]);
+  assert.deepEqual(parseCsvRows("a;b", "::"), [["a;b"]]);
+});

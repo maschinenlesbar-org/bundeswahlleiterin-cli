@@ -14,47 +14,68 @@ function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
+const QUOTE = 0x22;
+const LF = 0x0a;
+const CR = 0x0d;
+
 /**
  * Tokenise CSV text into rows of raw string fields. Handles quoted fields
  * (delimiters, newlines and `""` escapes inside quotes). A trailing newline does
  * not produce a spurious empty final row.
+ *
+ * A field is cut out of the text as slices between the characters that matter (a quote,
+ * the delimiter, CR, LF) and joined once, never built one character at a time: `field += ch`
+ * made a rope of one piece per character, and a 20 MB cell (a hostile or broken answer under
+ * the size cap) took the process past a 512 MB heap and crashed it before anything was printed.
  */
 export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   const rows: string[][] = [];
-  let field = "";
   let row: string[] = [];
+  let parts: string[] = [];
   let inQuotes = false;
   const src = stripBom(text);
+  // The delimiter is one character; a longer one never matched a single character before either.
+  const delim = delimiter.length === 1 ? delimiter.charCodeAt(0) : -1;
+  // `from` is where the text not yet taken into `parts` starts.
+  let from = 0;
+  const endField = (at: number): string => {
+    parts.push(src.slice(from, at));
+    const field = parts.length === 1 ? (parts[0] as string) : parts.join("");
+    parts = [];
+    return field;
+  };
 
   for (let i = 0; i < src.length; i++) {
-    const ch = src[i]!;
+    const c = src.charCodeAt(i);
     if (inQuotes) {
-      if (ch === '"') {
-        if (src[i + 1] === '"') {
-          field += '"';
+      if (c === QUOTE) {
+        if (src.charCodeAt(i + 1) === QUOTE) {
+          parts.push(src.slice(from, i + 1)); // up to and with one quote
           i++;
         } else {
+          parts.push(src.slice(from, i));
           inQuotes = false;
         }
-      } else {
-        field += ch;
+        from = i + 1;
       }
       continue;
     }
-    if (ch === '"') {
+    if (c === QUOTE) {
+      parts.push(src.slice(from, i));
       inQuotes = true;
-    } else if (ch === delimiter) {
-      row.push(field);
-      field = "";
-    } else if (ch === "\n") {
-      row.push(field);
+      from = i + 1;
+    } else if (c === delim) {
+      row.push(endField(i));
+      from = i + 1;
+    } else if (c === LF) {
+      row.push(endField(i));
       rows.push(row);
-      field = "";
       row = [];
-    } else if (ch === "\r") {
+      from = i + 1;
+    } else if (c === CR) {
       // swallow — the following \n (or EOF) ends the row
-    } else {
-      field += ch;
+      parts.push(src.slice(from, i));
+      from = i + 1;
     }
   }
   // A quote opened but never closed means the input ended mid-field. Left
@@ -69,6 +90,7 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
     );
   }
   // Flush the last field/row unless the input ended exactly on a newline.
+  const field = endField(src.length);
   if (field.length > 0 || row.length > 0) {
     row.push(field);
     rows.push(row);
