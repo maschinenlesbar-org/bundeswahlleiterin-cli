@@ -433,3 +433,14 @@ test("a network failure names the request: GET <url> failed: <reason>, userinfo 
     return true;
   });
 });
+
+test("a header named __proto__ is an ordinary header, never the prototype of the headers read (T12)", async () => {
+  // A JavaScript transport may return any object; JSON.parse makes "__proto__" an own key.
+  const headers = JSON.parse('{"__proto__":{"content-type":"text/csv; charset=iso-8859-1"}}') as Record<string, string>;
+  const e = new RequestEngine({ transport: async () => ({ status: 200, headers, body: Buffer.from("a;ü\n") }) });
+  // With the prototype set, the charset was read from it: "declares charset iso-8859-1 but is UTF-8".
+  assert.equal(await e.getText("/x.csv"), "a;ü\n");
+  const fetchLike = new Headers([["__proto__", "x"], ["content-type", "text/csv; charset=utf-8"]]);
+  const f = new RequestEngine({ transport: async () => ({ status: 200, headers: fetchLike as unknown as Record<string, string>, body: Buffer.from("a;ü\n") }) });
+  assert.equal(await f.getText("/x.csv"), "a;ü\n");
+});
