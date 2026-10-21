@@ -99,7 +99,8 @@ failure · `1` other (incl. a non-CSV/HTML response). See
 `--log-format jsonl` as one JSON object per line. The areas: `cli` (usage errors,
 commander's messages, unexpected errors), `api` (the data host's answers: an error
 status, and a malformed answer — an HTML page instead of the CSV file, a file without the
-expected header, cut off, compressed or empty), `http` (the connection, the cleartext
+expected header, cut off, compressed or empty; and a WARN when bytes that are not valid
+text were replaced with U+FFFD, naming how many), `http` (the connection, the cleartext
 warning, and one WARN per retry before it waits) and `output` (the `-o` file, stdout failures). A record is always one line;
 control characters in it are escaped.
 

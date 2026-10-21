@@ -178,11 +178,15 @@ transport, `fetch` against a silent server, a 2 MiB body and every body and head
 
 The dataset paths are exported as `BTW2025` for reference.
 
-**Character set.** `getText` decodes a body by the `charset` its Content-Type declares,
-strictly; without one (the host declares none) as strict UTF-8, the pinned files' encoding.
-A body that isn't valid in that charset, an unknown label, and a UTF-8 body labelled as a
-single-byte charset (which would garble every umlaut) are each a `BundeswahlParseError`,
-never text with U+FFFD or mojibake in it. The media type itself is ignored: the host serves
+**Character set.** `getText` decodes a body by the `charset` its Content-Type declares;
+without one (the host declares none) as UTF-8, the pinned files' encoding. An unknown label
+and a UTF-8 body labelled as a single-byte charset (which would garble every umlaut) are each
+a `BundeswahlParseError`. Bytes that aren't valid in the charset (a re-pin to a Latin-1
+variant, a corrupted byte) are replaced with U+FFFD and never silently: the engine option
+`onWarning(message)` is told how many and for which request (`GET <url>: 1 character of the
+answer was not valid text (invalid bytes in its character set) and replaced with U+FFFD.`),
+which the CLI logs as a `WARN` record of `bundeswahl.api`. One bad byte never sinks a whole
+file (D2 of the 2026-10-21 fix plan); a throwing hook is ignored. The media type itself is ignored: the host serves
 the CSVs as `text/csv`, `text/plain` or `application/octet-stream`. The client asks for no
 compression (it sends no `Accept-Encoding`), so a compressed body — a `Content-Encoding`
 other than `identity`, or gzip data without one — is a server or proxy compressing anyway:
@@ -504,7 +508,8 @@ and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cu
 code point and ends in `… (N more characters)`. The areas are `cli` (usage errors, commander's messages, unexpected errors), `api` (the
 data host's answers: an error status, the hint after a 3xx, and a malformed answer, a
 `BundeswahlParseError`: an HTML page instead of the CSV file, a file without the expected
-header, cut off, compressed, empty or in an unknown charset), `http` (the connection, the size-cap hint, the cleartext warning) and
+header, cut off, compressed, empty or in an unknown charset; and the WARN of `onWarning` when
+bytes that are not valid in the charset were replaced with U+FFFD), `http` (the connection, the size-cap hint, the cleartext warning) and
 `output` (`Wrote N bytes` after `-o`, or any failure to write that file: an `OutputError`, and a
 stdout write error). A refused `-o` target — `--force` without `-o`, a directory, an existing
 file without `--force` — is checked before any request (`checkOutputTarget`) and is a usage

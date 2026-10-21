@@ -643,3 +643,14 @@ test("a boolean that can be switched both ways may be given only once: optional 
     assert.deepEqual(seen, [expected], argv.join(" "));
   }
 });
+
+test("bytes that are not valid UTF-8 are replaced with U+FFFD, with one WARN record of the api area; the run succeeds (D2)", async () => {
+  const body = Buffer.concat([Buffer.from(fx.partiesCsv.slice(0, fx.partiesCsv.indexOf("Sozialdemokratische"))), Buffer.from("Sozialdemokratische Partei Deutschländs", "latin1"), Buffer.from(fx.partiesCsv.slice(fx.partiesCsv.indexOf(" Deutschlands") + " Deutschlands".length))]);
+  const cli = makeCli(() => rawResponse(body, "text/csv"));
+  assert.equal(await run(["--compact", "parties"], cli.deps), 0, cli.err.join("\n"));
+  const parties = JSON.parse(cli.out.join("\n")) as Array<{ name: string }>;
+  assert.equal(parties[1]?.name, "Sozialdemokratische Partei Deutschl�nds");
+  assert.deepEqual(untimed(cli.err.join("\n")).split("\n"), [
+    "WARN  [bundeswahl.api] GET https://www.bundeswahlleiterin.de/dam/jcr/925d6e98-3616-465a-835a-cec1ea73abc2/btw25_parteien.csv: 1 character of the answer was not valid text (invalid bytes in its character set) and replaced with U+FFFD.",
+  ]);
+});

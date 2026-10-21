@@ -43,6 +43,7 @@ export const ENGINE_OPTION_KEYS = [
   "maxResponseBytes",
   "sleep",
   "onRetry",
+  "onWarning",
 ] as const;
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
@@ -122,6 +123,14 @@ export interface EngineOptions {
    * and reset connection; never when there is no retry. A throw is swallowed.
    */
   onRetry?: ((event: RetryEvent) => void) | undefined;
+  /**
+   * Called with a one-line warning about an answer the engine delivered changed: bytes that
+   * were not valid in the declared (or default UTF-8) charset, replaced with U+FFFD. The message
+   * names the request and the count (`GET <url>: 2 characters of the answer were not valid text
+   * …`). Without it the replacement is silent. A throw is swallowed. The CLI logs it as a `WARN`
+   * record of `bundeswahl.api`.
+   */
+  onWarning?: ((message: string) => void) | undefined;
 }
 
 /** What `EngineOptions.onRetry` is told about one retry. */
@@ -321,13 +330,11 @@ function hasTransientCode(err: unknown, depth = 0): boolean {
 }
 
 /**
- * Decode a CSV body by the `charset` its Content-Type declares (P8), strictly.
+ * Decode a CSV body by the `charset` its Content-Type declares (P8).
  *
- * - No charset, or a UTF-8 one: strict UTF-8 — the pinned files are UTF-8 (the Wahlkreis
- *   file is the `…_utf8.csv` variant of one also published in another charset) and the
- *   host declares no charset. Buffer#toString would turn every non-UTF-8 byte into U+FFFD,
- *   so a re-pin to the wrong variant would pass unnoticed and every umlaut filter would
- *   silently match nothing; a body that isn't UTF-8 is a BundeswahlParseError instead.
+ * - No charset, or a UTF-8 one: UTF-8 — the pinned files are UTF-8 (the Wahlkreis file is the
+ *   `…_utf8.csv` variant of one also published in another charset) and the host declares no
+ *   charset.
  * - Another known label (`iso-8859-1`, `windows-1252`, …): decoded with it, so a file in
  *   another character set that says so reads correctly. One guard: a body declared as a
  *   single-byte charset that is valid UTF-8 with non-ASCII bytes is a mislabelled UTF-8 file
@@ -335,9 +342,13 @@ function hasTransientCode(err: unknown, depth = 0): boolean {
  *   into mojibake ("Ã¼") with exit 0, so it is a BundeswahlParseError.
  * - An unknown label: a BundeswahlParseError naming it.
  *
- * A leading byte-order mark is dropped (TextDecoder's default).
+ * Bytes that are not valid in the charset (a re-pin to a Latin-1 variant, a corrupted byte)
+ * become U+FFFD, and `replaced` counts them, exactly for UTF-8 (a U+FFFD the server sent is not
+ * counted): the caller reports the count (`onWarning`), so the text is never changed silently,
+ * and one bad byte never sinks a whole file (D2). A leading byte-order mark is dropped
+ * (TextDecoder's default).
  */
-function decodeCsvBody(body: Buffer, contentType: string, request: string): string {
+function decodeCsvBody(body: Buffer, contentType: string, request: string): { text: string; replaced: number } {
   const declared = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
   let decoder: TextDecoder;
   try {
@@ -362,14 +373,30 @@ function decodeCsvBody(body: Buffer, contentType: string, request: string): stri
     }
   }
   try {
-    return decoder.decode(body);
+    return { text: decoder.decode(body), replaced: 0 };
   } catch {
-    const declaredPart = declared === undefined ? "" : ` (declared charset "${sanitizeServerText(declared)}")`;
-    throw new BundeswahlParseError(
-      `${request}: the answer is not valid UTF-8${declaredPart} — the file may have been ` +
-        "replaced by a variant in another character set (e.g. Latin-1).",
-    );
+    // Not valid in the charset: decode with replacement, and count what was replaced.
+    const text = new TextDecoder(decoder.encoding).decode(body);
+    const sent = decoder.encoding === "utf-8" ? countBytes(body, REPLACEMENT_UTF8) : 0;
+    return { text, replaced: countChar(text, 0xfffd) - sent };
   }
+}
+
+/** U+FFFD in UTF-8. */
+const REPLACEMENT_UTF8 = Buffer.from([0xef, 0xbf, 0xbd]);
+
+/** How often `needle` occurs in `body`. */
+function countBytes(body: Buffer, needle: Buffer): number {
+  let n = 0;
+  for (let at = body.indexOf(needle); at !== -1; at = body.indexOf(needle, at + needle.length)) n++;
+  return n;
+}
+
+/** How often the UTF-16 unit `code` occurs in `text`. */
+function countChar(text: string, code: number): number {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === code) n++;
+  return n;
 }
 
 /**
@@ -451,6 +478,7 @@ export class RequestEngine {
   private readonly maxResponseBytes: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly onRetry: ((event: RetryEvent) => void) | undefined;
+  private readonly onWarning: ((message: string) => void) | undefined;
 
   constructor(options: EngineOptions = {}) {
     // A misspelled option (`timeout`, `maxRetry`) was ignored and its default used.
@@ -493,6 +521,17 @@ export class RequestEngine {
     this.sleep = functionOption("sleep", options.sleep, realSleep);
     this.onRetry =
       options.onRetry === undefined ? undefined : functionOption("onRetry", options.onRetry, () => {});
+    this.onWarning =
+      options.onWarning === undefined ? undefined : functionOption("onWarning", options.onWarning, () => {});
+  }
+
+  /** Tell `onWarning` about an answer delivered changed. A throwing callback never breaks the request. */
+  private warn(message: string): void {
+    try {
+      this.onWarning?.(message);
+    } catch {
+      // a logging hook is no reason to fail the request
+    }
   }
 
   /** Tell `onRetry` about a retry, then wait. A throwing callback never breaks the request. */
@@ -728,16 +767,24 @@ export class RequestEngine {
       const head = t.replace(/^\uFEFF/, "").trimStart().slice(0, 200).toLowerCase();
       return head.startsWith("<!doctype html") || head.startsWith("<html");
     };
-    let text: string;
+    let decoded: { text: string; replaced: number };
     try {
-      text = decodeCsvBody(res.data, res.contentType, request);
+      decoded = decodeCsvBody(res.data, res.contentType, request);
     } catch (err) {
       if (looksLikeHtml(res.data.toString("latin1"))) throw htmlPage();
       throw err;
     }
+    const text = decoded.text;
     if (looksLikeHtml(text)) throw htmlPage();
     if (text.trim().length === 0) {
       throw new BundeswahlParseError(`${request}: empty response body (expected a CSV file).`);
+    }
+    if (decoded.replaced > 0) {
+      const n = decoded.replaced;
+      this.warn(
+        `${request}: ${n} ${n === 1 ? "character" : "characters"} of the answer ${n === 1 ? "was" : "were"} ` +
+          "not valid text (invalid bytes in its character set) and replaced with U+FFFD.",
+      );
     }
     return text;
   }
