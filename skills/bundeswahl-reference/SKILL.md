@@ -92,8 +92,9 @@ bundeswahl structure --wahlkreis 152 \
   that numbering. Say so rather than ranking such Wahlkreise against each other.
   > **The footnote's ranges are an upper bound, not a guarantee.** Some columns inside
   > them genuinely differ per Wahlkreis. Berlin's footnote lists "1, 7 bis 14 und 17 bis
-  > 48", but across its 12 Wahlkreise Spalten 7, 8 and 17–20 each hold ~10 distinct
-  > values, while 1, 9–14 and 33–48 are identical. So the safe test is the data, not the
+  > 48", but across its 12 Wahlkreise Spalten 7, 8, 17–20, 23 (companies) and 26–32
+  > (school leavers, childcare) each hold 9–10 distinct values, while only 1, 9–14, 21, 22,
+  > 24, 25 and 33–48 are identical. So the safe test is the data, not the
   > note: before declaring a column city-wide, check whether its values actually repeat
   > across that city's Wahlkreise. (Every column that *is* identical falls inside the
   > footnote's ranges, so the note never lets an identical column through unflagged.)

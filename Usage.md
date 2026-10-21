@@ -137,7 +137,7 @@ Every value is a **string** in German number format (`"128,0"`) — convert with
 forms several Wahlkreise (Berlin, Hamburg, München, Leipzig, …), many columns hold the
 city-wide value, so those Wahlkreise show identical figures. Treat the footnote's column
 ranges as an **upper bound** — some columns inside them do vary per Wahlkreis (across
-Berlin's 12, Spalten 7, 8 and 17–20 each hold ~10 distinct values) — so check whether the
+Berlin's 12, Spalten 7, 8, 17–20, 23 and 26–32 each hold 9–10 distinct values) — so check whether the
 values actually repeat before calling a column city-wide.
 
 > **The official Land/Bund totals are not in the default output.** The file carries 17
