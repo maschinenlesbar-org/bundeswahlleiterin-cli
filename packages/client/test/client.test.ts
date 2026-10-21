@@ -216,6 +216,24 @@ test("name filters match across NFD umlauts and hyphen vs en dash", async () => 
   assert.equal((await wk().wahlkreise({ land: "Schleswig\u2010Holstein" })).length, 2); // U+2010 hyphen
 });
 
+test("name filters fold case fully: upper-case SS matches a name with ß, and ß matches SS", async () => {
+  const csv =
+    "Land;Wahlkreis-Nr.;Wahlkreis-Name;Fläche (km²)\n" +
+    "Hessen;173;Gießen;854,6\n" +
+    "Sachsen;155;Meißen;1452,3\n" +
+    "Hessen;185;Groß-Gerau;453,0\n" +
+    "Deutschland;999;Insgesamt;357684,2\n";
+  const st = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+  for (const name of ["GIESSEN", "giessen", "Giessen", "GIEẞEN", "Gießen", "GIEßEN"]) {
+    assert.deepEqual((await st().structure({ wahlkreis: name })).map((r) => r["Wahlkreis-Nr."]), ["173"], name);
+  }
+  assert.deepEqual((await st().structure({ wahlkreis: "MEISSEN" })).map((r) => r["Wahlkreis-Nr."]), ["155"]);
+  assert.deepEqual((await st().structure({ wahlkreis: "GROSS-GERAU" })).map((r) => r["Wahlkreis-Nr."]), ["185"]);
+  // The kerg2 names fold the same way (one rule for every filter).
+  const kerg = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv.replaceAll("Kiel", "Gießen"))).transport });
+  assert.equal((await kerg.results({ area: "GIESSEN", areaType: "Wahlkreis" })).length, 4);
+});
+
 test("the library validates its filters before any request, like the CLI", async () => {
   const bad: Array<[string, (c: BundeswahlClient) => Promise<unknown>, RegExp]> = [
     ["areaType", (c) => c.results({ areaType: "Kreis" as never }), /Invalid areaType: expected one of Bund, Land, Wahlkreis, got "Kreis"/],

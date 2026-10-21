@@ -57,11 +57,15 @@ export type BundeswahlClientOptions = EngineOptions;
 /**
  * Comparison form of a name or filter value: NFC-normalised (a decomposed umlaut,
  * as macOS file names and some input methods produce, matches the files' composed
- * one), lower-cased, and with every dash variant (hyphen, en/em dash, minus sign…)
+ * one), case-folded, and with every dash variant (hyphen, en/em dash, minus sign…)
  * folded to "-" — 93 Wahlkreis names use " – " (U+2013) where users type "-".
+ *
+ * Case folding is lower-casing plus ß → "ss" (and the capital ẞ, which lower-cases to ß):
+ * the upper-case form of "Gießen" is "GIESSEN", so `--area GIESSEN` must find it, while
+ * `toLowerCase()` alone maps "SS" to "ss" and never to "ß" (six Wahlkreis names have one).
  */
 function fold(text: string): string {
-  return text.normalize("NFC").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-");
+  return text.normalize("NFC").toLowerCase().replace(/ß/g, "ss").replace(/[\u2010-\u2015\u2212]/g, "-");
 }
 
 /** Case-, normalisation- and dash-insensitive substring test (see {@link fold}). */
