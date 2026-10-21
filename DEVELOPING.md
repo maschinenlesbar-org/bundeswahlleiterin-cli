@@ -318,7 +318,10 @@ an EPIPE on stdout (`| head`, a `jq` that exits early) exits 0 quietly — it us
 an unhandled-EPIPE stack trace and exit 1; an EPIPE on stderr is ignored, so a failed run
 keeps its own exit code; any other stdout write error is an ERROR record of
 `bundeswahl.output` (`Could not write to stdout: …`, in the format argv asks for:
-`processLogger`) and exits 1.
+`processLogger`) and exits 1. stdout redirected to a regular file (`> out.json`) is written with
+every byte checked (`stdoutWriter`, `writeAll`): Node's stream wrote it with one `writeSync` and
+ignored a short count, so a file-size limit or a full disk cut the output short with exit 0; now
+the failure (EFBIG, ENOSPC) is stdout's `error`, that same ERROR record, and exit 1.
 `apps/cli/test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin for both.
 
 **Two seams make the whole thing testable in-process (no subprocesses):**
@@ -439,7 +442,8 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   `parity.test.ts`), P25 the response corpus (only its empty-answer and malformed-answer cases run, each
   checking that the error names the request: the number and big-integer cases are for JSON
   answers, and this API has none), P26 `-o` integrity (runs the built
-  bin: under `ulimit -f` a write cut short leaves the old file and no temporary one; a missing
+  bin: under `ulimit -f` a write cut short leaves the old file and no temporary one, and stdout
+  redirected to a file and cut short is exit 1 with an ERROR record; a missing
   directory is refused before any request; `/dev/null`, a FIFO and `/dev/stdout` are written in
   place; `--force` through a dangling link creates its target; a 255-byte name is written; a
   signal during the request or the write leaves no claim and no temporary file). The test fixtures (`fixtures.ts`) are complete datasets in the sense
