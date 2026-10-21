@@ -102,6 +102,18 @@ test("an HTML page instead of CSV exits 1 with a helpful message", async () => {
   assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.api\] Expected a CSV file from .* but received an HTML page/);
 });
 
+test("a kerg2 count with more digits than a JS number holds exits 1, names the cell and prints nothing", async () => {
+  const csv = fx.kerg2Csv.replace(";36690;", ";12345678901234567890;");
+  const cli = makeCli((req) => (req.url.includes("kerg2") ? csvResponse(csv) : routeFixture(req)));
+  assert.equal(await run(["results"], cli.deps), 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(
+    untimed(cli.err.join("\n")),
+    /^ERROR \[bundeswahl\.api\] Malformed CSV: column "Anzahl" .* has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/,
+  );
+  assert.ok(!cli.err.join("\n").includes("12345678901234567000"));
+});
+
 test("--compact prints single-line JSON", async () => {
   const cli = makeCli();
   await run(["results", "--compact"], cli.deps);

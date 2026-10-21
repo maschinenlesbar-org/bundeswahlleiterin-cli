@@ -87,7 +87,8 @@ der Daten: Sie dürfen sie frei kopieren, bearbeiten und weiterverwenden, auch k
 kodiert, verwenden **deutsche Dezimalzahlen** (Komma, z. B. `82,5122`) und beginnen vor
 der Kopfzeile mit einer mehrzeiligen, für Menschen gedachten **Präambel**. `bundeswahl`
 erledigt all das; bei `results` erhalten Sie Anzahlen und Prozentwerte als JSON-Zahlen,
-`null` bei leeren oder `–`-Zellen. `structure` gibt seine Werte unverändert als Strings
+`null` bei leeren oder `–`-Zellen; eine Zahl mit mehr als 15 signifikanten Stellen (mehr,
+als eine JSON-Zahl exakt fasst) ist ein Fehler und wird nie gerundet. `structure` gibt seine Werte unverändert als Strings
 im deutschen Format aus (`"128,0"`).
 
 ## CLI / Technik

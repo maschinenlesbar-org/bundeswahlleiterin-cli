@@ -192,6 +192,19 @@ test("a malformed number or Stimme in kerg2 is a parse error naming the cell, no
   }
 });
 
+test("a kerg2 count with more digits than a JS number holds is a parse error naming the cell, never rounded", async () => {
+  // SPD's Erststimmen in Kiel (data row 5) as 20 digits: a double would read it as 12345678901234567000.
+  const csv = fx.kerg2Csv.replace(";36690;", ";12345678901234567890;");
+  assert.notEqual(csv, fx.kerg2Csv);
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+  await assert.rejects(
+    () => c.results(),
+    (err) =>
+      err instanceof BundeswahlParseError &&
+      /^Malformed CSV: column "Anzahl" in data row 5 of .*kerg2\.csv has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/.test(err.message),
+  );
+});
+
 test("name filters match across NFD umlauts and hyphen vs en dash", async () => {
   const kerg = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv)).transport });
   assert.equal((await kerg().results({ party: "GRU\u0308NE", areaType: "Bund" })).length, 1); // NFD Ü

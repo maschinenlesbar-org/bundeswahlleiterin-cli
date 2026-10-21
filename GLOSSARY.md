@@ -83,7 +83,9 @@ attribution** ("Quelle: Die Bundeswahlleiterin, Wiesbaden 2025"). See
 **CSV quirks.** The files are **semicolon-delimited**, **UTF-8 with a BOM**, use
 **German decimals** (comma, e.g. `82,5122`), and start with a multi-line
 human-readable **preamble** before the header row. `bundeswahl` handles all of this;
-in `results`, counts/percentages reach you as JSON numbers, `null` for empty/`–` cells.
+in `results`, counts/percentages reach you as JSON numbers, `null` for empty/`–` cells;
+a number with more than 15 significant digits (more than a JSON number holds exactly)
+is an error, never rounded.
 `structure` passes its values through as strings in German format (`"128,0"`).
 
 ## CLI / technical

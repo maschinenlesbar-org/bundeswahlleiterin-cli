@@ -193,6 +193,32 @@ export function rowsToObjects(parsed: ParsedCsv): Record<string, string>[] {
 const GERMAN_NUMBER = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$/;
 
 /**
+ * The most significant digits a German number may have: a double carries 15 decimal
+ * digits exactly, so up to 15 the JS number reads back as the cell's value.
+ */
+export const MAX_SIGNIFICANT_DIGITS = 15;
+
+/** Why a German number is refused for its length, for a message; the caller checked the format. */
+export const TOO_MANY_DIGITS = `has more than ${MAX_SIGNIFICANT_DIGITS} significant digits, more than a JS number holds exactly`;
+
+/**
+ * The digits of a well-formed German number that count against MAX_SIGNIFICANT_DIGITS:
+ * all of them but the integer part's leading zeros and the fraction's trailing zeros.
+ * The fraction's leading zeros count (`0,0001` has four), so a tiny value can't
+ * underflow to 0 either.
+ */
+function significantDigits(s: string): number {
+  const [integer = "", fraction = ""] = s.replace(/[-.]/g, "").split(",");
+  return integer.replace(/^0+/, "").length + fraction.replace(/0+$/, "").length;
+}
+
+/** True for a well-formed German number with more than MAX_SIGNIFICANT_DIGITS digits. */
+export function hasTooManyDigits(value: string): boolean {
+  const s = value.trim();
+  return GERMAN_NUMBER.test(s) && significantDigits(s) > MAX_SIGNIFICANT_DIGITS;
+}
+
+/**
  * Parse a German-formatted number (comma decimal separator, optional thousands
  * dots) into a JS number. Returns `null` for empty / placeholder (`-`, `–`) cells
  * so callers can distinguish "no value" from `0`.
@@ -200,6 +226,8 @@ const GERMAN_NUMBER = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$/;
  * Anything else throws a BundeswahlParseError. `Number()` alone accepted JS
  * literal syntax (`0x10` → 16, `1e3` → 1000), and turning an unparseable cell into
  * `null` made it read as "no candidate/list here" — a wrong answer with exit 0.
+ * So does a number with more than MAX_SIGNIFICANT_DIGITS digits: a double would
+ * round it (a 20-digit count came back as …567000), never the value in the file.
  */
 export function parseGermanNumber(value: string): number | null {
   const s = value.trim();
@@ -208,6 +236,9 @@ export function parseGermanNumber(value: string): number | null {
     throw new BundeswahlParseError(
       `Malformed CSV: "${cutForMessage(sanitizeServerText(s))}" is not a German-formatted number.`,
     );
+  }
+  if (significantDigits(s) > MAX_SIGNIFICANT_DIGITS) {
+    throw new BundeswahlParseError(`Malformed CSV: "${cutForMessage(s)}" ${TOO_MANY_DIGITS}.`);
   }
   return Number(s.replace(/\./g, "").replace(",", "."));
 }

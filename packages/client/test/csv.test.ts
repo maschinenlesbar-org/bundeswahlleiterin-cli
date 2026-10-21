@@ -103,6 +103,40 @@ test("parseGermanNumber rejects JS literal syntax and malformed cells instead of
   }
 });
 
+test("parseGermanNumber refuses a number with more digits than a JS number holds, never a rounded value", () => {
+  // A double carries 15 significant decimal digits exactly; a 20-digit count used to
+  // come back rounded (12345678901234567890 -> 12345678901234567000), with exit 0.
+  for (const bad of [
+    "12345678901234567890",
+    "-12345678901234567890",
+    "12.345.678.901.234.567.890",
+    "1234567890123456", // 16 digits
+    "1,23456789012345678",
+    "0,0000000000000001", // the fraction's leading zeros count: 16 digits
+  ]) {
+    assert.throws(
+      () => parseGermanNumber(bad),
+      (err: unknown) =>
+        err instanceof BundeswahlParseError &&
+        err.message === `Malformed CSV: "${bad}" has more than 15 significant digits, more than a JS number holds exactly.`,
+      bad,
+    );
+  }
+  // A huge cell is named cut, not echoed whole.
+  const huge = "9".repeat(2000);
+  assert.throws(
+    () => parseGermanNumber(huge),
+    (err: unknown) => err instanceof BundeswahlParseError && err.message.length < 700 && err.message.includes(`"${"9".repeat(500)}…"`),
+  );
+  // Up to the cap every value parses exactly; leading zeros of the integer and trailing
+  // zeros of the fraction don't count.
+  assert.equal(parseGermanNumber("999999999999999"), 999999999999999);
+  assert.equal(parseGermanNumber("-999.999.999.999.999"), -999999999999999);
+  assert.equal(parseGermanNumber("0,123456789012345"), 0.123456789012345);
+  assert.equal(parseGermanNumber("000000000000000000012"), 12);
+  assert.equal(parseGermanNumber("12,500000000000000000000"), 12.5);
+});
+
 test("rowsToObjects rejects a duplicate column name instead of overwriting it", () => {
   // Two "b" columns: the second would win and the displaced field would go empty,
   // producing a wrong row that still exits 0. Fail loudly instead.

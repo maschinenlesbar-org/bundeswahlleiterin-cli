@@ -85,7 +85,8 @@ and an unmatched filter yields `[]`.
 
 Every command prints **JSON to stdout**; diagnostics go to stderr, so piping into
 `jq` stays clean. Counts (`anzahl`) are integers and shares (`prozent`) are numbers;
-empty/placeholder cells are `null`.
+empty/placeholder cells are `null`. A number with more than 15 significant digits
+(more than a JSON number holds exactly) is an error (exit 1), never rounded.
 
 Each line on stderr is a **log record**: a timestamp (UTC), a level (`ERROR`, `WARN`,
 `INFO`) and a topic, the program and the area it comes from (`bundeswahl.cli` for usage

@@ -9,7 +9,15 @@
 //   await c.wahlkreise({ land: "Bayern" });
 
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
-import { assertUniqueHeader, parseCsv, parseGermanNumber, rowsToObjects, type ParsedCsv } from "./csv.js";
+import {
+  assertUniqueHeader,
+  hasTooManyDigits,
+  parseCsv,
+  parseGermanNumber,
+  rowsToObjects,
+  TOO_MANY_DIGITS,
+  type ParsedCsv,
+} from "./csv.js";
 import { BundeswahlParseError, BundeswahlValidationError, cutForMessage, describeValue } from "./errors.js";
 import { assertValid, knownKeysProblem } from "./validate.js";
 import type {
@@ -320,14 +328,15 @@ export class BundeswahlClient {
     assertUnambiguousNumbers(parsed, at, RESULT_NUMBER_COLUMNS, BTW2025.results);
     // A malformed number or ballot is a parse error naming the cell, never a
     // `null` (which means "no candidate/list here") or a row that drops out of a
-    // --vote filter.
+    // --vote filter; so is a number too long for a double, never a rounded value.
     const num = (r: string[], row: number, column: string): number | null => {
       const raw = cell(r, at(column));
       try {
         return parseGermanNumber(raw);
       } catch {
         throw new BundeswahlParseError(
-          `Malformed CSV: column "${column}" in data row ${row} of ${BTW2025.results} is not a number: ` +
+          `Malformed CSV: column "${column}" in data row ${row} of ${BTW2025.results} ` +
+            `${hasTooManyDigits(raw) ? TOO_MANY_DIGITS : "is not a number"}: ` +
             `"${cutForMessage(sanitizeServerText(raw))}".`,
         );
       }

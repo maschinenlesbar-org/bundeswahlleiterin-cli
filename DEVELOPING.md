@@ -206,7 +206,12 @@ a `BundeswahlParseError` that says so, rather than a misleading charset diagnosi
   dynamic-columned Strukturdaten).
 - **`parseGermanNumber(s)`** — comma-decimal → JS number, `null` for empty/`-`/`–`;
   anything else (`0x10`, `1e3`, `1,2,3`) throws a `BundeswahlParseError` rather than
-  guessing or reading as `null`. It reads `16.413` as 16413 (a thousands dot), so
+  guessing or reading as `null`. So does a number with more than 15 significant digits
+  (`MAX_SIGNIFICANT_DIGITS`; the integer part's leading zeros and the fraction's trailing
+  zeros don't count, the fraction's leading zeros do): a double carries 15 digits exactly,
+  so a 20-digit count would come back rounded. The message names the cell (cut with
+  `cutForMessage`), never the rounded value; the real counts (≈ 61 million) and the
+  six-decimal shares are far below the cap. It reads `16.413` as 16413 (a thousands dot), so
   `results()` first checks each number column's convention: unless the column shows
   thousands dots elsewhere (a grouped value that can't be a decimal, and no value of 1000
   or more without them), a one-dot, three-digit value is ambiguous — 16.413 in an
