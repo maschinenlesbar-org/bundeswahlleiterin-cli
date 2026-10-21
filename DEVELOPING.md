@@ -446,7 +446,10 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   redirected to a file and cut short is exit 1 with an ERROR record; a missing
   directory is refused before any request; `/dev/null`, a FIFO and `/dev/stdout` are written in
   place; `--force` through a dangling link creates its target; a 255-byte name is written; a
-  signal during the request or the write leaves no claim and no temporary file). The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  signal during the request or the write leaves no claim and no temporary file), P27 big and
+  odd answers (runs the built bin under `--max-old-space-size`: 20 M DEL characters in a cell
+  print escaped within 512 MB, 90 MB of them is "too large to print"; its JSON-only cases, a
+  flat array and a lone-surrogate escape, are skipped). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
 ## Continuous integration
