@@ -85,6 +85,23 @@ export async function parity(
   return { cli, lib };
 }
 
+/**
+ * `parity` in the shape the kit's conformance tests (P24, P25) read: the library's outcome as
+ * one object, `{ ok, value?, error?: { name, message }, requests }`, rather than this repo's
+ * union, whose `error` keeps the thrown value for `instanceof` checks.
+ */
+export async function kitParity(
+  ...args: Parameters<typeof parity>
+): Promise<{ cli: CliOutcome; lib: { ok: boolean; value?: unknown; error?: { name: string; message: string }; requests: HttpRequest[] } }> {
+  const { cli, lib } = await parity(...args);
+  return {
+    cli,
+    lib: lib.ok
+      ? { ok: true, value: lib.value, requests: lib.requests }
+      : { ok: false, error: lib.error as { name: string; message: string }, requests: lib.requests },
+  };
+}
+
 /** The method + URL + headers of each request, for comparing the two sides. */
 export function requestShapes(requests: HttpRequest[]): { method: string; url: string; headers: unknown }[] {
   return requests.map((r) => ({ method: r.method, url: r.url, headers: r.headers }));

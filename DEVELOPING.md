@@ -411,7 +411,11 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   and other-secret cases are skipped: no environment variable, no key), P21 the README's
   relative links (README.md ships to npmjs.com, so a link to a document the `files`
   allowlist leaves out must be an absolute GitHub URL), P23 the log on stderr (record
-  format, `--log-format jsonl`, no secret in either format). The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  format, `--log-format jsonl`, no secret in either format). P24 the input corpus (empty here, with
+  the reason in its adapter: no text filter or id goes into a request, the filters match the
+  downloaded rows client-side), P25 the response corpus (only its empty-answer case runs: the
+  number cases are for JSON answers, and this API has none), P26 `-o` integrity (runs the built
+  bin under `ulimit -f`: a write cut short leaves the old file and no temporary one). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
 ## Continuous integration
