@@ -358,6 +358,9 @@ message for a dash-leading filter value (`parseTextArg`) quotes it the same way
 charset (P8), malformed 2xx bodies (P9) and twenty wrong-typed calls (P13).
 `apps/cli/test/conformance-p10-strict-filters.test.ts` checks unknown, misspelled and `__proto__`
 keys, unknown area levels and ballots, wrong-typed values and repeated CLI flags.
+Repeated options are refused by one rule, `forbidRepeatedOptions` (`shared.ts`), which
+`buildProgram` applies to the whole command tree: a single-value option given twice is
+`--x may be given only once.` (exit 2, no request); flags may repeat.
 
 ## Testing
 

@@ -165,6 +165,10 @@ Given **before or after** the command, e.g. `bundeswahl --compact results`:
 | `--max-retries <n>` | Retries for transient `429`/`503` responses and reset connections (0..10, default `2`); a refused connection, a DNS failure and a timeout are not retried. Each retry waits 200 ms × attempt, or the server's `Retry-After` (seconds or HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried, and the error names the requested wait. Each retry logs one WARN record of `bundeswahl.http` before it waits (`HTTP 503 from host: retry 1 of 3 in 2 s`). |
 | `--max-response-bytes <n>` | Cap response body size in bytes (`0` = unlimited; default 100 MiB) |
 
+Every option that takes a value is given once: a second `--timeout`, `--base-url` or
+`--party` is a usage error (`--timeout may be given only once.`, exit 2) before any request,
+never "the last one wins". Flags (`--compact`, `--force`, `--include-aggregates`) may repeat.
+
 A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
 `::1`) works, but the CLI writes one `WARN` record of `bundeswahl.http` to stderr before the
 first request, e.g. `… WARN  [bundeswahl.http] requests to mirror.example are sent unencrypted (http:, not https:)`,

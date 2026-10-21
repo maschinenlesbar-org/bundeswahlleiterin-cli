@@ -46,18 +46,27 @@ export function parseNonEmpty(value: string): string {
 }
 
 /**
- * Wrap a commander value-parser for a single-valued option: a second occurrence is
- * a usage error instead of silently replacing the first (`--party SPD --party CDU`
- * used to return only CDU). Only for options without a default, since commander
- * passes the default as `previous` on the first call.
+ * Make giving a single-value option twice a usage error, on `command` and every subcommand:
+ * commander keeps the last value silently, so `--party SPD --party CDU` returned only CDU and
+ * `--timeout 1000 --timeout 0` switched the timeout off, with nothing telling the user a value
+ * was dropped. The message is `--x may be given only once.` (exit 2, before any request).
+ * Flags without a value are left alone, and so is a repeatable option, declared the commander
+ * way with an array default (`.option("--tag <t>", …, collect, [])`; this CLI has none). Call it
+ * once on a freshly built program: the check counts per Option object.
  */
-export function once<T>(parse: (value: string) => T): (value: string, previous: T | undefined) => T {
-  return (value, previous) => {
-    if (previous !== undefined) {
-      throw new InvalidArgumentError("Given more than once; this option takes a single value.");
-    }
-    return parse(value);
-  };
+export function forbidRepeatedOptions(command: Command): void {
+  for (const option of command.options) {
+    if ((!option.required && !option.optional) || option.variadic || Array.isArray(option.defaultValue)) continue;
+    const parse = option.parseArg;
+    let given = false;
+    const guarded = (value: string, previous: unknown): unknown => {
+      if (given) throw new InvalidArgumentError(`${option.long ?? option.short} may be given only once.`);
+      given = true;
+      return parse === undefined ? value : parse(value, previous);
+    };
+    option.parseArg = guarded as typeof option.parseArg;
+  }
+  for (const child of command.commands) forbidRepeatedOptions(child);
 }
 
 /**

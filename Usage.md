@@ -24,6 +24,10 @@ bundeswahl [global options] <command> [command options]
 | `-f, --force` | with `--output`, overwrite the file if it already exists (without it, an existing file is never overwritten) |
 | `-V, --version` / `-h, --help` | version / help |
 
+Every option that takes a value is given once: a second `--timeout`, `--base-url` or
+`--party` is a usage error (`--timeout may be given only once.`, exit 2) before any request,
+never "the last one wins". Flags (`--compact`, `--force`, `--include-aggregates`) may repeat.
+
 A base URL on plain `http:` to a host other than loopback (`localhost`, `127.0.0.0/8`,
 `::1`) works, but the CLI writes one `WARN` record of `bundeswahl.http` to stderr before the
 first request, e.g. `… WARN  [bundeswahl.http] requests to mirror.example are sent unencrypted (http:, not https:)`,

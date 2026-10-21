@@ -314,21 +314,33 @@ test("credentials in --base-url are redacted in error messages but still sent", 
   assert.match(cli.mt.last().url, /^http:\/\/user:s3cret@127\.0\.0\.1:18106\//);
 });
 
-test("repeating a filter option is a usage error, not a silent last-one-wins", async () => {
-  for (const args of [
-    ["results", "--party", "SPD", "--party", "CDU"],
-    ["results", "--area", "Kiel", "--area", "001"],
-    ["results", "--area-type", "Bund", "--area-type", "Land"],
-    ["results", "--vote", "1", "--vote", "2"],
-    ["results", "--group-type", "Partei", "--group-type", "System-Gruppe"],
-    ["wahlkreise", "--land", "BY", "--land", "SN"],
-    ["structure", "--wahlkreis", "1", "--wahlkreis", "2"],
-  ]) {
+test("repeating a single-value option is a usage error, not a silent last-one-wins (K5)", async () => {
+  for (const [name, args] of [
+    ["--party", ["results", "--party", "SPD", "--party", "CDU"]],
+    ["--area", ["results", "--area", "Kiel", "--area", "001"]],
+    ["--area-type", ["results", "--area-type", "Bund", "--area-type", "Land"]],
+    ["--vote", ["results", "--vote", "1", "--vote", "2"]],
+    ["--group-type", ["results", "--group-type", "Partei", "--group-type", "System-Gruppe"]],
+    ["--land", ["wahlkreise", "--land", "BY", "--land", "SN"]],
+    ["--wahlkreis", ["structure", "--wahlkreis", "1", "--wahlkreis", "2"]],
+    // The global options, before or after the command, in either form.
+    ["--timeout", ["--timeout", "1000", "--timeout", "0", "parties"]],
+    ["--timeout", ["--timeout=1000", "parties", "--timeout", "0"]],
+    ["--base-url", ["--base-url", "https://www.bundeswahlleiterin.de", "--base-url", "https://example.test", "parties"]],
+    ["--log-format", ["--log-format", "text", "--log-format", "jsonl", "parties"]],
+    ["--user-agent", ["--user-agent", "a/1", "--user-agent", "b/2", "parties"]],
+    ["--max-retries", ["--max-retries", "1", "--max-retries", "2", "parties"]],
+    ["--max-response-bytes", ["--max-response-bytes", "1", "--max-response-bytes", "0", "parties"]],
+    ["--output", ["-o", "-", "--output", "-", "parties"]],
+  ] as const) {
     const cli = makeCli();
-    assert.equal(await run(args, cli.deps), 2, args.join(" "));
-    assert.equal(cli.mt.calls.length, 0);
-    assert.match(cli.err.join("\n"), /Given more than once; this option takes a single value\./);
+    assert.equal(await run([...args], cli.deps), 2, args.join(" "));
+    assert.equal(cli.mt.calls.length, 0, args.join(" "));
+    assert.match(cli.err.join("\n"), new RegExp(`${name} may be given only once\\.`), args.join(" "));
   }
+  // Flags may repeat.
+  const flags = makeCli();
+  assert.equal(await run(["--compact", "--compact", "structure", "--include-aggregates", "--include-aggregates"], flags.deps), 0, flags.err.join("\n"));
 });
 
 test("a blank --user-agent is a usage error, not a silent fallback to the default", async () => {

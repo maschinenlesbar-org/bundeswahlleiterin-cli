@@ -10,7 +10,7 @@ import { defaultIO } from "./io.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { DEFAULT_BASE_URL, MAX_RETRIES } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/engine";
 import { MAX_TIMEOUT_MS } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
-import { parseBaseUrl, parseBoundedInt, parseHeaderValue, parseIntArg, parseOutputPath } from "./shared.js";
+import { forbidRepeatedOptions, parseBaseUrl, parseBoundedInt, parseHeaderValue, parseIntArg, parseOutputPath } from "./shared.js";
 import { registerCommands } from "./commands/datasets.js";
 import { DEFAULT_LOG_FORMAT, logFormatProblem } from "./log.js";
 
@@ -84,6 +84,8 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .showHelpAfterError();
 
   registerCommands(program, deps);
+  // A single-value option given twice is a usage error, never "the last one wins".
+  forbidRepeatedOptions(program);
 
   return program;
 }
