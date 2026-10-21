@@ -337,15 +337,13 @@ function hasTransientCode(err: unknown, depth = 0): boolean {
  *
  * A leading byte-order mark is dropped (TextDecoder's default).
  */
-function decodeCsvBody(body: Buffer, contentType: string, path: string): string {
+function decodeCsvBody(body: Buffer, contentType: string, request: string): string {
   const declared = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(declared ?? "utf-8", { fatal: true });
   } catch {
-    throw new BundeswahlParseError(
-      `Unsupported response charset "${sanitizeServerText(declared ?? "")}" from ${path}.`,
-    );
+    throw new BundeswahlParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(declared ?? ""))}".`);
   }
   if (decoder.encoding !== "utf-8") {
     const nonAscii = body.some((b) => b >= 0x80);
@@ -358,7 +356,7 @@ function decodeCsvBody(body: Buffer, contentType: string, path: string): string 
     }
     if (nonAscii && utf8) {
       throw new BundeswahlParseError(
-        `The response from ${path} declares charset "${sanitizeServerText(declared ?? "")}" but is ` +
+        `${request}: the answer declares charset "${cutForMessage(sanitizeServerText(declared ?? ""))}" but is ` +
           "UTF-8 — decoding it as declared would garble every umlaut.",
       );
     }
@@ -368,7 +366,7 @@ function decodeCsvBody(body: Buffer, contentType: string, path: string): string 
   } catch {
     const declaredPart = declared === undefined ? "" : ` (declared charset "${sanitizeServerText(declared)}")`;
     throw new BundeswahlParseError(
-      `The response from ${path} is not valid UTF-8${declaredPart} — the file may have been ` +
+      `${request}: the answer is not valid UTF-8${declaredPart} — the file may have been ` +
         "replaced by a variant in another character set (e.g. Latin-1).",
     );
   }
@@ -568,6 +566,16 @@ export class RequestEngine {
   }
 
   /**
+   * The request URL as error messages show it: absolute (so a message names the host that gave
+   * a bad answer, which matters with a custom base URL), userinfo redacted and cut at
+   * MAX_MESSAGE_VALUE_LENGTH characters. An answer error reads `GET <this>: …`, like a network
+   * error (`GET <this> failed: …`); the client's own parse errors use it too.
+   */
+  describeUrl(path: string, query?: QueryParams): string {
+    return cutForMessage(redactUrl(this.buildUrl(path, query)));
+  }
+
+  /**
    * Call the transport under the overall deadline (`timeoutMs`): the request gets an
    * AbortSignal that fires at the deadline, and the call rejects then whether the transport
    * stops or not — a custom transport (fetch, a node:http wrapper) that ignores `timeoutMs`
@@ -695,6 +703,8 @@ export class RequestEngine {
    */
   async getText(path: string, query?: QueryParams): Promise<string> {
     const res = await this.request(path, query);
+    // Every answer error names the request, as a network error does (D9).
+    const request = `GET ${this.describeUrl(path, query)}`;
     // The client sends no Accept-Encoding, so a compressed body is a server or proxy
     // that compresses anyway. Say so: the strict decoder below would otherwise blame the
     // character set ("not valid UTF-8 … e.g. Latin-1"), pointing at the wrong cause.
@@ -705,13 +715,13 @@ export class RequestEngine {
         ? `Content-Encoding: ${cutForMessage(sanitizeServerText(encoding))}`
         : "gzip data without a Content-Encoding";
       throw new BundeswahlParseError(
-        `The response from ${path} is compressed (${what}) although the client asked for no ` +
+        `${request}: the answer is compressed (${what}) although the client asked for no ` +
           "compression — a server or proxy compressed it anyway, so it can't be read as CSV.",
       );
     }
     const htmlPage = (): BundeswahlParseError =>
       new BundeswahlParseError(
-        `Expected a CSV file from ${path} but received an HTML page — the file may ` +
+        `${request}: expected a CSV file but received an HTML page — the file may ` +
           "have moved, or --base-url points somewhere unexpected.",
       );
     const looksLikeHtml = (t: string): boolean => {
@@ -720,14 +730,14 @@ export class RequestEngine {
     };
     let text: string;
     try {
-      text = decodeCsvBody(res.data, res.contentType, path);
+      text = decodeCsvBody(res.data, res.contentType, request);
     } catch (err) {
       if (looksLikeHtml(res.data.toString("latin1"))) throw htmlPage();
       throw err;
     }
     if (looksLikeHtml(text)) throw htmlPage();
     if (text.trim().length === 0) {
-      throw new BundeswahlParseError(`Empty response from ${path} — no content (expected a CSV file).`);
+      throw new BundeswahlParseError(`${request}: empty response body (expected a CSV file).`);
     }
     return text;
   }

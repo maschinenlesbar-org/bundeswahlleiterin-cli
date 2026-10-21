@@ -51,7 +51,8 @@ test("a truncated or ragged data row is a parse error, not a half-parsed row", a
       () => c.results(),
       (err) =>
         err instanceof BundeswahlParseError &&
-        err.message.includes(`data row 8 of ${BTW2025.results} has ${cells} cells, the header has 19`),
+        err.message.startsWith(`GET https://www.bundeswahlleiterin.de${BTW2025.results}: `) &&
+        err.message.includes(`data row 8 has ${cells} cells, the header has 19`),
       String(cells),
     );
   }
@@ -173,7 +174,7 @@ test("a renamed or missing column is a parse error, not an all-null field or an 
     const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
     await assert.rejects(
       () => call(c),
-      (err) => err instanceof BundeswahlParseError && err.message.includes(`Missing column "${column}"`),
+      (err) => err instanceof BundeswahlParseError && err.message.includes(`missing column "${column}" in the header`),
       column,
     );
   }
@@ -183,9 +184,9 @@ test("a malformed number or Stimme in kerg2 is a parse error naming the cell, no
   const row = (stimme: string, anzahl: string) =>
     `BT;23.02.2025;Bund;99;Bundesgebiet;;;Partei;SPD;1;${stimme};${anzahl};16,4;1;1;1;1;;\n`;
   for (const [extra, message] of [
-    [row("2", "0x10"), /column "Anzahl" in data row 8 of .*kerg2\.csv is not a number: "0x10"/],
-    [row("2", "1e3"), /column "Anzahl" in data row 8 .* is not a number: "1e3"/],
-    [row("02", "1"), /column "Stimme" in data row 8 .* must be 1, 2 or empty, got "02"/],
+    [row("2", "0x10"), /kerg2\.csv: Malformed CSV: column "Anzahl" in data row 8 is not a number: "0x10"/],
+    [row("2", "1e3"), /column "Anzahl" in data row 8 is not a number: "1e3"/],
+    [row("02", "1"), /column "Stimme" in data row 8 must be 1, 2 or empty, got "02"/],
   ] as const) {
     const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.kerg2Csv + extra)).transport });
     await assert.rejects(() => c.results(), (err) => err instanceof BundeswahlParseError && message.test(err.message));
@@ -201,7 +202,7 @@ test("a kerg2 count with more digits than a JS number holds is a parse error nam
     () => c.results(),
     (err) =>
       err instanceof BundeswahlParseError &&
-      /^Malformed CSV: column "Anzahl" in data row 5 of .*kerg2\.csv has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/.test(err.message),
+      /^GET https:\/\/www\.bundeswahlleiterin\.de\/.*kerg2\.csv: Malformed CSV: column "Anzahl" in data row 5 has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/.test(err.message),
   );
 });
 
@@ -343,8 +344,8 @@ test("a file cut at a row boundary, or with no data rows, is a parse error in ev
   const headerOnly = (csv: string, header: string) => `${csv.slice(0, csv.indexOf(header) + header.length)}\n`;
   const kerg2Header = lines(fx.kerg2Csv)[5]!;
   const cases: Array<[string, string, (c: BundeswahlClient) => Promise<unknown>, RegExp]> = [
-    ["kerg2 header only", headerOnly(fx.kerg2Csv, kerg2Header), (c) => c.results(), /has a header but no data rows/],
-    ["kerg2 cut inside an area", withoutLast(fx.kerg2Csv), (c) => c.results({ area: "Kiel" }), /is incomplete — its last row \(Kiel, GRÜNE\) is not an area's closing "Übrige" row/],
+    ["kerg2 header only", headerOnly(fx.kerg2Csv, kerg2Header), (c) => c.results(), /: Malformed CSV: a header but no data rows/],
+    ["kerg2 cut inside an area", withoutLast(fx.kerg2Csv), (c) => c.results({ area: "Kiel" }), /the file is incomplete — its last row \(Kiel, GRÜNE\) is not an area's closing "Übrige" row/],
     [
       "kerg2 cut at an area boundary",
       fx.kerg2Csv.split("\n").filter((l) => !l.includes(";Kiel;")).join("\n") +
@@ -358,15 +359,43 @@ test("a file cut at a row boundary, or with no data rows, is a parse error in ev
       (c) => c.results(),
       /the Länder's Wahlberechtigte don't add up to the Bund's/,
     ],
-    ["parties header only", headerOnly(fx.partiesCsv, "GruppennameKurz;Gruppenname"), (c) => c.parties(), /has a header but no data rows/],
+    ["parties header only", headerOnly(fx.partiesCsv, "GruppennameKurz;Gruppenname"), (c) => c.parties(), /: Malformed CSV: a header but no data rows/],
     ["parties cut", withoutLast(fx.partiesCsv), (c) => c.parties(), /its last row is not the closing "Übrige" group/],
-    ["wahlkreise header only", headerOnly(fx.wahlkreiseCsv, "LAND_ABK"), (c) => c.wahlkreise(), /has 0 rows, not the 299 Wahlkreise/],
-    ["wahlkreise cut", withoutLast(fx.wahlkreiseCsv, 3), (c) => c.wahlkreise({ land: "BY" }), /has 296 rows, not the 299 Wahlkreise/],
-    ["structure header only", headerOnly(fx.structureCsv, "Bevölkerung"), (c) => c.structure(), /has a header but no data rows/],
+    ["wahlkreise header only", headerOnly(fx.wahlkreiseCsv, "LAND_ABK"), (c) => c.wahlkreise(), /the file has 0 rows, not the 299 Wahlkreise/],
+    ["wahlkreise cut", withoutLast(fx.wahlkreiseCsv, 3), (c) => c.wahlkreise({ land: "BY" }), /the file has 296 rows, not the 299 Wahlkreise/],
+    ["structure header only", headerOnly(fx.structureCsv, "Bevölkerung"), (c) => c.structure(), /: Malformed CSV: a header but no data rows/],
     ["structure cut", withoutLast(fx.structureCsv), (c) => c.structure(), /its last row is not the national summary "Insgesamt"/],
   ];
   for (const [label, csv, call, message] of cases) {
     const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
     await assert.rejects(() => call(c), (e: unknown) => e instanceof BundeswahlParseError && message.test(e.message), label);
+  }
+});
+
+test("every parse error of a dataset names the request: method and URL (D9)", async () => {
+  const kerg = fx.kerg2Csv;
+  const cases: Array<[string, string, (c: BundeswahlClient) => Promise<unknown>]> = [
+    ["no header", "a;b\n1;2\n", (c) => c.parties()],
+    ["missing column", fx.partiesCsv.replace("GruppennameKurz", "Kurzname"), (c) => c.parties()],
+    ["ragged row", fx.partiesCsv.replace("2;PARTEI;Partei;SPD;", "2;PARTEI;Partei;"), (c) => c.parties()],
+    ["unterminated quote", fx.partiesCsv.replace("Übrige;Übrige", '"Übrige;Übrige'), (c) => c.parties()],
+    ["duplicate column", fx.partiesCsv.replace("GruppennameKurz;Gruppenname", "Gruppenname;Gruppenname"), (c) => c.parties()],
+    ["no data rows", fx.partiesCsv.split("\n").slice(0, 3).join("\n") + "\n", (c) => c.parties()],
+    ["parties cut", fx.partiesCsv.replace("28;UEBRIGE;System-Gruppe;Übrige;Übrige\n", ""), (c) => c.parties()],
+    ["not a number", kerg.replace("36690", "36x690"), (c) => c.results()],
+    ["Stimme", kerg.replace(";SPD;1;1;", ";SPD;1;7;"), (c) => c.results()],
+    ["Gebietsart", kerg.replace(";Wahlkreis;005;Kiel;LAND;01;Partei;SPD", ";WK;005;Kiel;LAND;01;Partei;SPD"), (c) => c.results()],
+    ["ambiguous dot", kerg.replace("36690", "36.690"), (c) => c.results()],
+    ["results cut", kerg.split("\n").slice(0, -2).join("\n") + "\n", (c) => c.results()],
+    ["wahlkreise cut", fx.wahlkreiseCsv.split("\n").slice(0, -2).join("\n") + "\n", (c) => c.wahlkreise()],
+    ["structure cut", fx.structureCsv.split("\n").slice(0, -2).join("\n") + "\n", (c) => c.structure()],
+  ];
+  for (const [name, csv, call] of cases) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(
+      () => call(c),
+      (err: Error) => err instanceof BundeswahlParseError && /^GET https:\/\/www\.bundeswahlleiterin\.de\/[^ ]+\.csv: /.test(err.message),
+      name,
+    );
   }
 });

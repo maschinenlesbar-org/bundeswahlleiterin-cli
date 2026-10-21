@@ -330,7 +330,9 @@ calling `process.exit`).
 the userinfo redacted and `(after N retries)` when there were some, for a timeout, the size
 cap, a refused connection, a DNS failure and a reset alike, and the original error is its
 `cause`), `BundeswahlParseError` (the body was not CSV — usually
-an HTML page), and `BundeswahlValidationError` (a client-side usage error, raised
+an HTML page — or not the expected file; its message names the request the same way,
+`GET <url>: …`, userinfo redacted, from `RequestEngine#describeUrl`, for the engine's checks
+and the client's: `GET <url>: Malformed CSV: data row 8 has 5 cells, …`), and `BundeswahlValidationError` (a client-side usage error, raised
 before any request: a base URL that is blank, has surrounding whitespace, is not http(s)
 or has a query/fragment, a numeric
 option outside its range, a `userAgent` or `defaultHeaders` value that is blank or holds
@@ -428,8 +430,9 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   format, `--log-format jsonl`, no secret in either format). P24 the input corpus (empty here, with
   the reason in its adapter: no text filter or id goes into a request, the filters match the
   downloaded rows client-side; its REFUSED corpus runs through every text filter in
-  `parity.test.ts`), P25 the response corpus (only its empty-answer case runs: the
-  number cases are for JSON answers, and this API has none), P26 `-o` integrity (runs the built
+  `parity.test.ts`), P25 the response corpus (only its empty-answer and malformed-answer cases run, each
+  checking that the error names the request: the number and big-integer cases are for JSON
+  answers, and this API has none), P26 `-o` integrity (runs the built
   bin under `ulimit -f`: a write cut short leaves the old file and no temporary one). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 

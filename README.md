@@ -141,7 +141,8 @@ A closed stderr (`2>&1 | true`) doesn't change these codes: a failed run keeps i
   URLs (some behind `dam/jcr` identifiers) are pinned in the client; if the section
   is reorganised, a path needs updating.
 - **Exit `1` / "received an HTML page"** — the request returned an HTML page instead
-  of a CSV (a moved file, or a custom `--base-url`).
+  of a CSV (a moved file, or a custom `--base-url`). Every such error starts with the
+  request it is about: `GET https://www.bundeswahlleiterin.de/…/kerg2.csv: …`.
 - **Exit `1` / "is incomplete" or "no data rows"** — the downloaded file is cut short
   (each dataset is checked against its own structure, e.g. kerg2's totals must add up).
   Try again later; the CLI never answers with part of a file.

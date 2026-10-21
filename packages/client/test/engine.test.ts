@@ -33,7 +33,7 @@ test("getText reports an empty body clearly, not as a parse failure", async () =
   const e = new RequestEngine({ transport: mt.transport });
   await assert.rejects(
     () => e.getText("/x.csv"),
-    (err) => err instanceof BundeswahlParseError && /Empty response/.test(err.message),
+    (err) => err instanceof BundeswahlParseError && /^GET https:\/\/www\.bundeswahlleiterin\.de\/x\.csv: empty response body \(expected a CSV file\)\.$/.test(err.message),
   );
 });
 
@@ -206,7 +206,7 @@ test("getText rejects a body that is not valid UTF-8 instead of decoding it to U
   const engine = new RequestEngine({ transport: makeMockTransport(() => rawResponse(latin1, "text/csv")).transport });
   await assert.rejects(
     () => engine.getText("/p.csv"),
-    (err: unknown) => err instanceof BundeswahlParseError && /from \/p\.csv is not valid UTF-8/.test(err.message),
+    (err: unknown) => err instanceof BundeswahlParseError && /^GET https:\/\/www\.bundeswahlleiterin\.de\/p\.csv: the answer is not valid UTF-8/.test(err.message),
   );
   // A Latin-1 HTML page is still reported as an HTML page.
   const html = Buffer.from("<!doctype html><title>Ü</title>", "latin1");
@@ -443,4 +443,24 @@ test("a header named __proto__ is an ordinary header, never the prototype of the
   const fetchLike = new Headers([["__proto__", "x"], ["content-type", "text/csv; charset=utf-8"]]);
   const f = new RequestEngine({ transport: async () => ({ status: 200, headers: fetchLike as unknown as Record<string, string>, body: Buffer.from("a;ü\n") }) });
   assert.equal(await f.getText("/x.csv"), "a;ü\n");
+});
+
+test("an answer error names the request: method and URL, userinfo redacted (D9)", async () => {
+  const { gzipSync } = await import("node:zlib");
+  const request = "GET https://***@h.test/m/x.csv?y=1: ";
+  const cases: Array<[string, () => { status: number; headers: Record<string, string>; body: Buffer }]> = [
+    ["HTML page", () => ({ status: 200, headers: { "content-type": "text/html" }, body: Buffer.from(fx.htmlShell) })],
+    ["empty", () => ({ status: 200, headers: {}, body: Buffer.from("  \n") })],
+    ["compressed", () => ({ status: 200, headers: { "content-encoding": "gzip" }, body: gzipSync(Buffer.from("a;b\n")) })],
+    ["unknown charset", () => ({ status: 200, headers: { "content-type": "text/csv; charset=x-klingon" }, body: Buffer.from("a;b\n") })],
+    ["mislabelled", () => ({ status: 200, headers: { "content-type": "text/csv; charset=iso-8859-1" }, body: Buffer.from("a;ü\n") })],
+  ];
+  for (const [name, respond] of cases) {
+    const e = new RequestEngine({ baseUrl: "https://alice:s3cret@h.test/m", transport: async () => respond() });
+    await assert.rejects(
+      () => e.getText("/x.csv", { y: "1" }),
+      (err: Error) => err instanceof BundeswahlParseError && err.message.startsWith(request) && !err.message.includes("s3cret"),
+      name,
+    );
+  }
 });

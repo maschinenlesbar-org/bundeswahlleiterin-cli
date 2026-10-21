@@ -101,7 +101,7 @@ test("an HTML page instead of CSV exits 1 with a helpful message", async () => {
   const cli = makeCli(() => rawResponse(fx.htmlShell, "text/html"));
   const code = await run(["results"], cli.deps);
   assert.equal(code, 1);
-  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.api\] Expected a CSV file from .* but received an HTML page/);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[bundeswahl\.api\] GET https:\/\/www\.bundeswahlleiterin\.de\/\S+kerg2\.csv: expected a CSV file but received an HTML page/);
 });
 
 test("a kerg2 count with more digits than a JS number holds exits 1, names the cell and prints nothing", async () => {
@@ -111,7 +111,7 @@ test("a kerg2 count with more digits than a JS number holds exits 1, names the c
   assert.deepEqual(cli.out, []);
   assert.match(
     untimed(cli.err.join("\n")),
-    /^ERROR \[bundeswahl\.api\] Malformed CSV: column "Anzahl" .* has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/,
+    /^ERROR \[bundeswahl\.api\] GET \S+kerg2\.csv: Malformed CSV: column "Anzahl" .* has more than 15 significant digits, more than a JS number holds exactly: "12345678901234567890"\.$/,
   );
   assert.ok(!cli.err.join("\n").includes("12345678901234567000"));
 });
