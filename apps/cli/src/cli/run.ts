@@ -183,9 +183,11 @@ export function redactionFor(argv: readonly string[]): Redaction {
   const passwords = new Set<string>();
   // A base URL typed without its scheme is read as if it had one.
   const baseUrls = flagValues(argv, BASE_URL_FLAGS).map((value) => (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) ? value : `http://${value}`));
-  for (const source of [...values, ...baseUrls]) {
+  for (const source of [...values.flatMap(urlsWithin), ...baseUrls]) {
     for (const secret of credentialsIn(source)) {
       secrets.add(secret);
+      // As a request URL in an error record carries it: percent-encoded, with its "@".
+      echoed.add(encodeURIComponent(`${secret}@`));
       secrets.add(escapeTerminalText(secret));
       secrets.add(JSON.stringify(secret).slice(1, -1));
       // What a server echoes back: the Basic value and the decoded user:password on
@@ -203,6 +205,32 @@ export function redactionFor(argv: readonly string[]): Redaction {
   const passwordList = [...passwords].sort((a, b) => b.length - a.length);
   const out = (text: string): string => redactSecrets(redactUserinfo(redactCredentials(text, list)), echoedList);
   return { out, err: (text) => redactSecrets(out(text), passwordList) };
+}
+
+/** The most URLs `urlsWithin` reads inside one argument, after the one it may start with. */
+const MAX_URLS_WITHIN = 64;
+
+/** A character a URL scheme may hold after its first letter. */
+const SCHEME_CHAR = /[A-Za-z0-9+.-]/;
+
+/**
+ * `value` and the rest of it from each place a URL starts inside it (`<scheme>://`, the scheme
+ * starting with a letter), for `credentialsIn`, which reads a URL at the start of its input only.
+ * A filter text is matched trimmed, so a padded `" https://user:pw@host"`, one after a dash or
+ * inside a phrase reaches the refusals and commander's echo, which quote the value. Each `://`
+ * is found with indexOf and its scheme by walking back, never by a pattern retried at every
+ * position (quadratic: 40 000 scheme characters took ~3 s); at most MAX_URLS_WITHIN are read
+ * from one argument, since each is parsed whole.
+ */
+function urlsWithin(value: string): string[] {
+  const found = [value];
+  for (let at = value.indexOf("://"); at !== -1 && found.length <= MAX_URLS_WITHIN; at = value.indexOf("://", at + 3)) {
+    let start = at;
+    while (start > 0 && SCHEME_CHAR.test(value[start - 1] as string)) start--;
+    while (start < at && !/[A-Za-z]/.test(value[start] as string)) start++;
+    if (start > 0 && start < at) found.push(value.slice(start));
+  }
+  return found;
 }
 
 /**

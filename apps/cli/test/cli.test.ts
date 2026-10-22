@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Command } from "commander";
-import { run } from "../src/cli/run.js";
+import { redactionFor, run } from "../src/cli/run.js";
 import { forbidRepeatedOptions } from "../src/cli/shared.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { nodeFiles, refuseOverwrite, type CliDeps } from "../src/cli/io.js";
@@ -658,4 +658,65 @@ test("bytes that are not valid UTF-8 are replaced with U+FFFD, with one WARN rec
   assert.deepEqual(untimed(cli.err.join("\n")).split("\n"), [
     "WARN  [bundeswahl.api] GET https://www.bundeswahlleiterin.de/dam/jcr/925d6e98-3616-465a-835a-cec1ea73abc2/btw25_parteien.csv: 1 character of the answer was not valid text (invalid bytes in its character set) and replaced with U+FFFD.",
   ]);
+});
+
+// T15 of the 2026-10-21 fix round (jobsuche-cli 28be809, ladesaeulenregister-cli 001c48d): a URL
+// with a password anywhere in an argument — padded, after a dash, inside a phrase — must never
+// reach stderr, neither raw in a refusal, a note or commander's echo nor percent-encoded in the
+// request URL of an error record.
+test("a password in a URL inside any argument is redacted on stderr, raw or percent-encoded (T15)", async () => {
+  const url = "https://bob:s3cretpw@host.example/x";
+  const argvs = [
+    ["results", "--party", ` ${url}`],
+    ["results", "--party", `SPD ${url}`],
+    ["results", "--party", ` -${url}`],
+    ["results", "--party", `-${url}`],
+    ["results", `--party= ${url}`],
+    ["results", "--area", ` ${url}`],
+    ["results", "--group-type", `Partei ${url}`],
+    ["results", "--area-type", ` ${url}`],
+    ["results", "--vote", `1 ${url}`],
+    ["wahlkreise", "--land", ` ${url}`],
+    ["wahlkreise", "--land", `-${url}`],
+    ["structure", "--wahlkreis", `Kiel ${url}`],
+    ["structure", "--wahlkreis", "\u0001" + url],
+    ["-o", ` -${url}`, "parties"],
+    ["-o", `-${url}`, "parties"],
+    [`--output=-${url}`, "parties"],
+    ["--user-agent", ` ${url}`, "parties"],
+    ["--user-agent", `agent ${url}\u0001`, "parties"],
+    ["--base-url", ` ${url}`, "parties"],
+    ["--base-url", url, "parties"],
+    [` ${url}`],
+    ["parties", ` ${url}`],
+    ["results", `--bogus= ${url}`],
+    ["results", "--party", `x ${url}`, "--bogus"],
+  ];
+  const answers = [
+    routeFixture,
+    () => rawResponse("not found", "text/plain", 404),
+    () => rawResponse("busy", "text/plain", 503),
+  ];
+  for (const argv of argvs) {
+    for (const answer of answers) {
+      const cli = makeCli(answer);
+      await run(["--max-retries", "0", ...argv], cli.deps);
+      const err = cli.err.join("\n");
+      assert.doesNotMatch(err, /s3cretpw|bob%3As3|s3cretpw%40/, `${JSON.stringify(argv)}: ${err}`);
+    }
+  }
+});
+
+test("the search for URLs inside an argument is linear: a 1 MB argument is read at once (T15)", async () => {
+  // A pattern retried at every position took ~3 s for 40 000 scheme characters without "://".
+  for (const big of ["a".repeat(1 << 20), "a://".repeat(1 << 18), `${"a".repeat(1 << 20)}://bob:s3cretpw@h/`]) {
+    const started = performance.now();
+    const redaction = redactionFor(["results", "--party", big]);
+    redaction.err(`x ${big.slice(-40)}`);
+    assert.ok(performance.now() - started < 1000, `${big.slice(0, 8)}…: ${Math.round(performance.now() - started)} ms`);
+  }
+  // At most 64 URLs inside one argument are read; the first ones are redacted.
+  const many = Array.from({ length: 100 }, (_, i) => ` https://u${i}:pw${i}xyz@h/`).join("");
+  const err = redactionFor(["results", "--party", many]).err(many);
+  assert.ok(!err.includes("pw0xyz") && !err.includes("pw63xyz"), err.slice(0, 200));
 });

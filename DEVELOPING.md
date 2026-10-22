@@ -98,9 +98,14 @@ selects the default host.
 A `user:password@` in the base URL (a mirror behind a login) never reaches the CLI's
 output. `credentialsIn(value)` finds the exact userinfo of a URL, parseable or not, and
 `redactCredentials(text, list)` replaces each `secret@` with `***@`; `redactUrl` falls
-back to them for a value that doesn't parse. Only a value that starts with a scheme
-counts (a bare `a:b@c` is a file name, a party name or a User-Agent as often as a
-credential), except as the `--base-url` value, which is read as if it had one.
+back to them for a value that doesn't parse. Only a URL with a scheme counts (a bare
+`a:b@c` is a file name, a party name or a User-Agent as often as a credential), except as
+the `--base-url` value, which is read as if it had one; it is found anywhere in an argument
+(`urlsWithin`: each `://` found with indexOf and its scheme by walking back, so the search is
+linear; at most 64 per argument), not only at its start: a padded `" https://user:pw@host"`, one after a dash,
+a control character or inside a phrase reached the filter, `-o` and `--user-agent` refusals,
+the `-o` note and commander's echo. Its percent-encoded form with the `@` (as a request URL
+carries it) is replaced too.
 `run()` starts with `withRedactedOutput(deps, argv)`, which collects the credentials of
 every argument (and of the value part of `--opt=value`, `redactionFor`) and redacts
 every line printed on stdout and every log record on stderr — commander's usage errors
