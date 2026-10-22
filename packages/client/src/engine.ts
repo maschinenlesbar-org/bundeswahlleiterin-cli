@@ -4,6 +4,7 @@
 // distribution: unauthenticated GETs against www.bundeswahlleiterin.de returning
 // CSV files (Datenlizenz Deutschland – Namensnennung 2.0).
 
+import { constants } from "node:buffer";
 import { TextDecoder } from "node:util";
 import {
   MAX_TIMEOUT_MS,
@@ -47,6 +48,8 @@ export const ENGINE_OPTION_KEYS = [
 ] as const;
 
 export const DEFAULT_BASE_URL = "https://www.bundeswahlleiterin.de";
+/** V8's longest string (2^29 − 24 characters on 64-bit). */
+const MAX_STRING_LENGTH = constants.MAX_STRING_LENGTH;
 const DEFAULT_USER_AGENT = "bundeswahlleiterin-cli";
 
 export interface RawResponse {
@@ -362,7 +365,8 @@ function decodeCsvBody(body: Buffer, contentType: string, request: string): { te
     try {
       new TextDecoder("utf-8", { fatal: true }).decode(body);
       utf8 = true;
-    } catch {
+    } catch (err) {
+      if (isStringTooLong(err)) throw tooLargeForText(request, body);
       // not UTF-8: the declared charset is plausible
     }
     if (nonAscii && utf8) {
@@ -374,13 +378,38 @@ function decodeCsvBody(body: Buffer, contentType: string, request: string): { te
   }
   try {
     return { text: decoder.decode(body), replaced: 0 };
-  } catch {
+  } catch (err) {
+    if (isStringTooLong(err)) throw tooLargeForText(request, body);
     // Not valid in the charset: decode with replacement, and count what was replaced.
-    const text = new TextDecoder(decoder.encoding).decode(body);
+    let text: string;
+    try {
+      text = new TextDecoder(decoder.encoding).decode(body);
+    } catch (again) {
+      if (isStringTooLong(again)) throw tooLargeForText(request, body);
+      throw again;
+    }
     const sent = decoder.encoding === "utf-8" ? countBytes(body, REPLACEMENT_UTF8) : 0;
     return { text, replaced: countChar(text, 0xfffd) - sent };
   }
 }
+
+/**
+ * True for V8's error for a string past its longest one (2^29 − 24 characters on 64-bit): a body
+ * of 512 MB and more, possible once `maxResponseBytes` is lifted, can't be decoded into one.
+ */
+function isStringTooLong(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === "ERR_STRING_TOO_LONG";
+}
+
+/** The parse error for a body too large to decode: it used to escape as a plain Error ("Unexpected error"). */
+function tooLargeForText(request: string, body: Buffer): BundeswahlParseError {
+  return new BundeswahlParseError(
+    `${request}: the answer is too large to read as text (${body.byteLength} bytes; the longest string is ${MAX_STRING_LENGTH} characters).`,
+  );
+}
+
+/** How much of an undecodable answer is read to tell an HTML page: its leading whitespace and its first tag. */
+const HTML_SNIFF_BYTES = 64 * 1024;
 
 /** U+FFFD in UTF-8. */
 const REPLACEMENT_UTF8 = Buffer.from([0xef, 0xbf, 0xbd]);
@@ -771,7 +800,8 @@ export class RequestEngine {
     try {
       decoded = decodeCsvBody(res.data, res.contentType, request);
     } catch (err) {
-      if (looksLikeHtml(res.data.toString("latin1"))) throw htmlPage();
+      // Only the head is read: the whole of a body too large to decode is too large here too.
+      if (looksLikeHtml(res.data.subarray(0, HTML_SNIFF_BYTES).toString("latin1"))) throw htmlPage();
       throw err;
     }
     const text = decoded.text;
@@ -790,8 +820,15 @@ export class RequestEngine {
   }
 
   private toApiError(url: string, status: number, body: Buffer, retryAfterMs?: number): BundeswahlApiError {
-    // The body is kept on the error (`body`) and may echo the request URL: scrub it.
-    const text = this.scrub(body.toString("utf8"));
+    // The body is kept on the error (`body`) and may echo the request URL: scrub it. One too
+    // large to be a string (maxResponseBytes lifted) is left out: the status is the error.
+    let raw = "";
+    try {
+      raw = body.toString("utf8");
+    } catch (err) {
+      if (!isStringTooLong(err)) throw err;
+    }
+    const text = this.scrub(raw);
     // The site serves HTML error pages, not a structured envelope; include a short,
     // whitespace-collapsed snippet only when the body is plain (non-HTML) text.
     const trimmed = text.trim();

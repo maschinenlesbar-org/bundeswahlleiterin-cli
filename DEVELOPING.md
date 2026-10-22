@@ -190,7 +190,14 @@ file (D2 of the 2026-10-21 fix plan); a throwing hook is ignored. The media type
 the CSVs as `text/csv`, `text/plain` or `application/octet-stream`. The client asks for no
 compression (it sends no `Accept-Encoding`), so a compressed body — a `Content-Encoding`
 other than `identity`, or gzip data without one — is a server or proxy compressing anyway:
-a `BundeswahlParseError` that says so, rather than a misleading charset diagnosis.
+a `BundeswahlParseError` that says so, rather than a misleading charset diagnosis. A body too
+large to become one string (512 MB and more, possible only with `maxResponseBytes: 0` or
+`--max-response-bytes 0`) is a `BundeswahlParseError`, `GET <url>: the answer is too large to
+read as text (N bytes; the longest string is 536870888 characters).`, from any of the decodes
+(the UTF-8 check of a single-byte label, the strict one, the replacing one), not a plain
+`Error` ("Unexpected error" in the CLI); only the first 64 KiB of an undecodable body are read
+to tell an HTML page. An error status with such a body keeps its `BundeswahlApiError`, without
+the body.
 
 ## The CSV parser
 

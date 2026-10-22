@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { TextDecoder } from "node:util";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, validateBaseUrl } from "../src/engine.js";
 import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
@@ -478,4 +479,40 @@ test("an answer error names the request: method and URL, userinfo redacted (D9)"
       name,
     );
   }
+});
+
+test("an answer longer than V8's longest string is a BundeswahlParseError naming the request, not a plain Error (T14)", async (t) => {
+  // A real one needs a body of 512 MB and more (possible with maxResponseBytes 0): V8's own
+  // error is stood in for, for the body marked by its length. `fatalToo` false: the strict
+  // decode fails as for an invalid byte, and only the replacing one after it is too long.
+  // Longer than the head read to tell an HTML page (64 KiB), which must not be the whole body.
+  const huge = Buffer.from(`Gebiet;Stimmen\n1;2\n${" ".repeat(70_000)}`);
+  const tooLong = (): Error => Object.assign(new Error("Cannot create a string longer than 0x1fffffe8 characters"), { code: "ERR_STRING_TOO_LONG" });
+  let fatalToo = true;
+  const decode = TextDecoder.prototype.decode;
+  t.mock.method(TextDecoder.prototype, "decode", function (this: InstanceType<typeof TextDecoder>, input?: Uint8Array, options?: { stream?: boolean }) {
+    if (input !== undefined && input.byteLength === huge.length) {
+      if (this.fatal && !fatalToo) throw Object.assign(new TypeError("The encoded data was not valid"), { code: "ERR_ENCODING_INVALID_ENCODED_DATA" });
+      throw tooLong();
+    }
+    return decode.call(this, input, options);
+  });
+  const toString = Buffer.prototype.toString;
+  t.mock.method(Buffer.prototype, "toString", function (this: Buffer, ...args: Parameters<Buffer["toString"]>) {
+    if (this.length === huge.length && (args[0] === "utf8" || args[0] === "latin1")) throw tooLong();
+    return toString.apply(this, args);
+  });
+  const message = `GET https://www.bundeswahlleiterin.de/x.csv?y=1: the answer is too large to read as text (${huge.length} bytes; the longest string is 536870888 characters).`;
+  for (const [contentType, strictToo] of [["text/csv", true], ["text/csv", false], ["text/csv; charset=iso-8859-1", true], ["text/csv; charset=iso-8859-1", false]] as const) {
+    fatalToo = strictToo;
+    const e = new RequestEngine({ maxResponseBytes: 0, transport: makeMockTransport(() => rawResponse(huge, contentType)).transport });
+    await assert.rejects(e.getText("/x.csv", { y: "1" }), (err: unknown) => {
+      assert.ok(err instanceof BundeswahlParseError, `${contentType} ${strictToo}: ${String(err)}`);
+      assert.equal(err.message, message);
+      return true;
+    });
+  }
+  // An error status with such a body is still the API error, without the unreadable body.
+  const failing = new RequestEngine({ maxResponseBytes: 0, maxRetries: 0, transport: makeMockTransport(() => rawResponse(huge, "text/plain", 500)).transport });
+  await assert.rejects(failing.getText("/x.csv"), (err: unknown) => err instanceof BundeswahlApiError && err.status === 500 && err.body === "");
 });
