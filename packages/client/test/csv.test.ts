@@ -162,7 +162,7 @@ test("the duplicate-column error strips terminal escapes and bidi controls from 
     () => rowsToObjects(parsed),
     (err: unknown) =>
       err instanceof BundeswahlParseError &&
-      err.message.includes('duplicate column name "[2J[31mX Y"') &&
+      err.message.includes('duplicate column name "X Y"') &&
       !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f‮\n]/.test(err.message),
   );
 });

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TextDecoder } from "node:util";
-import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, validateBaseUrl } from "../src/engine.js";
+import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, sanitizeServerText, validateBaseUrl } from "../src/engine.js";
 import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -70,8 +70,9 @@ test("the error detail is stripped of terminal control characters", async () => 
       // human-readable message that run.ts prints to stderr...
       assert.ok(!hasControls(err.detail ?? ""));
       assert.ok(!hasControls(err.message));
-      // ...while the printable characters survive.
-      assert.equal(err.detail, "boom[31mred2J");
+      // ...and so are whole escape sequences (no `[31m` or `2J` left behind), while the
+      // printable text survives.
+      assert.equal(err.detail, "boomred");
       // The raw body is preserved untouched for programmatic access.
       assert.equal(err.body, evil);
       return true;
@@ -515,4 +516,64 @@ test("an answer longer than V8's longest string is a BundeswahlParseError naming
   // An error status with such a body is still the API error, without the unreadable body.
   const failing = new RequestEngine({ maxResponseBytes: 0, maxRetries: 0, transport: makeMockTransport(() => rawResponse(huge, "text/plain", 500)).transport });
   await assert.rejects(failing.getText("/x.csv"), (err: unknown) => err instanceof BundeswahlApiError && err.status === 500 && err.body === "");
+});
+
+test("sanitizeServerText drops whole escape sequences, not just their control bytes", () => {
+  const ESC = String.fromCharCode(0x1b);
+  const BEL = String.fromCharCode(0x07);
+  const CSI8 = String.fromCharCode(0x9b);
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  for (const [input, expected] of [
+    [`line1 ${ESC}]0;title${BEL}rest`, "line1 rest"],
+    [`${ESC}]8;;https://evil.example${ESC}\\click${ESC}]8;;${ESC}\\`, "click"],
+    [`${ESC}[31mred${ESC}[0m plain`, "red plain"],
+    [`${ESC}[1;31;4mbold`, "bold"],
+    [`${CSI8}2Jcleared`, "cleared"],
+    [`${OSC8}0;t${ST8}ok`, "ok"],
+    [`a${ESC}7b${ESC}(Bc`, "abc"],
+    // Unterminated: only ESC and its introducer go, the text stays.
+    [`keep ${ESC}]0;no terminator here`, "keep 0;no terminator here"],
+  ] as const) {
+    assert.equal(sanitizeServerText(input), expected, JSON.stringify(input));
+  }
+});
+
+test("sanitizeServerText drops invisible format characters (zero-width, soft hyphen, BOM)", () => {
+  const text = "real\u200b error\u2028Error: forged\u2066x\u2069 \ufeffend\u00ad\u200d\u2060!";
+  assert.equal(sanitizeServerText(text), "real error Error: forgedx end!");
+});
+
+test("sanitizeServerText keeps ordinary text, umlauts and single spaces", () => {
+  assert.equal(sanitizeServerText("  Wahlkreis  Größe  Flensburg – Schleswig  "), "Wahlkreis Größe Flensburg – Schleswig");
+});
+
+test("sanitizeServerText reads a bounded prefix and drops what the per-character filter dropped", () => {
+  // The filter it replaces, one character at a time: C0 but TAB to CR, DEL, C1 and Cf go.
+  const perCharacter = (text: string): string =>
+    [...text]
+      .filter((ch) => {
+        const n = ch.codePointAt(0) ?? 0;
+        return (n >= 0x09 && n <= 0x0d) || !(n <= 0x1f || (n >= 0x7f && n <= 0x9f) || /\p{Cf}/u.test(ch));
+      })
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
+  const every = Array.from({ length: 0x3000 }, (_, i) => String.fromCharCode(i)).join("") + "\u{1f600}\u{e0001}\ud800x";
+  for (let at = 0; at < every.length; at += 512) {
+    const piece = every.slice(at, at + 512).replace(/[\u001b\u0090\u0098\u009b-\u009f]/g, "");
+    assert.equal(sanitizeServerText(piece), perCharacter(piece), `from U+${at.toString(16)}`);
+  }
+  // At most 16 384 units of the text are read, never half a surrogate pair: a huge CSV cell
+  // quoted in a parse error costs neither the heap nor seconds.
+  assert.equal(sanitizeServerText("x".repeat(100_000)).length, 16_384);
+  assert.equal(sanitizeServerText(`${"x".repeat(16_383)}\u{1f600}`), "x".repeat(16_383));
+  // A control string ends at another introducer: the first is dropped by the filter, the second
+  // string as a whole.
+  const ESC = String.fromCharCode(0x1b);
+  const BEL = String.fromCharCode(0x07);
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  assert.equal(sanitizeServerText(`a${OSC8}0;x${OSC8}0;t${ST8}b`), "a0;xb");
+  assert.equal(sanitizeServerText(`a${ESC}]0;x${ESC}]0;t${BEL}b`), "a0;xb");
 });

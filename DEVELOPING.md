@@ -382,7 +382,14 @@ a zero-width space, a soft hyphen, a bidi control — escaped as `\uXXXX`: `quot
 and server text in a message are cut at
 `MAX_MESSAGE_VALUE_LENGTH` (500) characters, a server's error text at 200, never inside a
 surrogate pair (`cutText`), so the message stays well-formed and bounded for a library
-caller too; the error's own properties keep the full value. The CLI's own parse-time
+caller too; the error's own properties keep the full value. Server text (an error detail, a
+CSV cell or header name quoted in a parse error) is cleaned by `sanitizeServerText`
+(exported): it reads at most the first 16 384 characters, drops whole terminal escape
+sequences (CSI, OSC and the other control strings, so no `[31m` is left behind), then the
+remaining C0/C1 controls, DEL and every format character (bidi controls, zero-width
+characters, soft hyphen, BOM), and folds whitespace to one space, all in linear regex
+replaces, so a huge hostile cell on an error path costs neither seconds nor the heap
+(`apps/cli/test/hostile-answers.test.ts`). The CLI's own parse-time
 message for a dash-leading filter value (`parseTextArg`) quotes it the same way
 (`quoteValue`), and commander's own echo of a rejected value (`argument '…' is invalid`) has
 its control and format characters escaped too (`escapeTerminalText` in `run.ts`), so a refused

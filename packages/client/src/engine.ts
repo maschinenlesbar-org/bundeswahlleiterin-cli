@@ -237,31 +237,58 @@ export function isBidiControl(code: number): boolean {
 }
 
 /**
+ * The most server text (in UTF-16 units) `sanitizeServerText` reads; a longer text is cut first.
+ * Every message keeps far less of it (MAX_MESSAGE_VALUE_LENGTH, 500 characters), and cleaning
+ * all of a 20 M-character CSV cell, one string node per character, exhausted a 512 MB heap.
+ */
+const MAX_SERVER_TEXT = 16 * 1024;
+
+/**
+ * A whole terminal escape sequence: a CSI (`ESC [` or the 8-bit U+009B, parameters,
+ * intermediates, final byte), a terminated control string (OSC/DCS/SOS/PM/APC, `ESC ]` …
+ * up to BEL or ST, or their 8-bit forms) or a short `ESC` sequence. Dropping only the
+ * control bytes left the printable rest behind (`ESC ] 0 ; title BEL` became `]0;title`).
+ * An unterminated control string is left to the per-character filter, so it cannot
+ * swallow the rest of the message. A control string's body ends at an ESC or at another
+ * introducer: with the introducers allowed inside it, an unterminated run of them was matched
+ * from each one to the end of the text, quadratic. Written with escapes, so the source holds
+ * no control bytes.
+ */
+const ESCAPE_SEQUENCE =
+  /(?:\u001b\[|\u009b)[\u0030-\u003f]*[\u0020-\u002f]*[\u0040-\u007e]|(?:\u001b[\]PX^_]|[\u0090\u0098\u009d-\u009f])[^\u0007\u001b\u0090\u0098\u009c-\u009f]*(?:\u0007|\u001b\\|\u009c)|\u001b[\u0020-\u002f]*[\u0030-\u007e]/g;
+
+/**
+ * What `sanitizeServerText` drops once the escape sequences are gone: the C0 controls but the
+ * whitespace ones (TAB to CR), DEL, the C1 controls, and every format character (General
+ * Category Cf: bidi controls, zero-width characters, U+00AD, U+FEFF, …).
+ */
+const DROPPED_CHAR = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\p{Cf}]/gu;
+
+/**
  * Make a string that originates in an attacker-controlled response safe to put in
- * an error message, which run.ts prints raw to stderr — the non-2xx error `detail`
- * snippet, and CSV header names quoted in a parse error:
+ * an error message, which run.ts prints to stderr — the non-2xx error `detail`
+ * snippet, and CSV cells and header names quoted in a parse error:
  *
- * - C0 and C1 controls and DEL are dropped, so a hostile or MITM'd endpoint cannot
+ * - Whole escape sequences (CSI, OSC and other control strings) are dropped first,
+ *   then any remaining C0 and C1 controls and DEL, so a hostile or MITM'd endpoint cannot
  *   drive ANSI/OSC escape sequences (retitle the window, clear the screen, spoof
  *   output) into the user's terminal.
- * - Bidi formatting characters (isBidiControl) are dropped, so server text cannot
- *   reorder the visible message.
+ * - Unicode format characters (General Category Cf) are dropped: the bidi controls
+ *   (isBidiControl), so server text cannot reorder the visible message, and the
+ *   invisible ones — zero-width space/joiners, word joiner, soft hyphen, BOM — so
+ *   two messages that look identical are identical.
  * - Every run of whitespace — newlines, tabs, U+2028/U+2029 included — becomes one
  *   space and the ends are trimmed, so the text stays on one line.
+ * - Only the first MAX_SERVER_TEXT (16 384) units are read (never half a surrogate pair), and
+ *   every step is a linear regex replace: a huge hostile cell costs neither seconds nor the heap.
+ *   A caller that scrubs credentials does so first, so a cut never splits one.
  *
  * The CLI's JSON output is escaped separately (escapeControlChars in
- * cli/shared.ts): JSON.stringify alone leaves DEL, the C1 range and the bidi controls raw. Written as
- * a code-point filter so the source file stays free of raw control bytes.
+ * cli/shared.ts): JSON.stringify alone leaves DEL, the C1 range and the bidi controls raw.
+ * Written with escapes so no raw control byte appears in this source.
  */
 export function sanitizeServerText(text: string): string {
-  let out = "";
-  for (const ch of text) {
-    const n = ch.codePointAt(0) ?? 0;
-    const whitespaceControl = n >= 0x09 && n <= 0x0d;
-    if (!whitespaceControl && (n <= 0x1f || (n >= 0x7f && n <= 0x9f) || isBidiControl(n))) continue;
-    out += ch;
-  }
-  return out.replace(/\s+/g, " ").trim();
+  return cutText(text, MAX_SERVER_TEXT).replace(ESCAPE_SEQUENCE, "").replace(DROPPED_CHAR, "").replace(/\s+/g, " ").trim();
 }
 
 /** Why `value` is not a usable HttpResponse, or undefined when it is. */
