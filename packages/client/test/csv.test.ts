@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/csv.js";
+import { MAX_CSV_CELLS, MAX_CSV_ROWS, headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/csv.js";
 import { BundeswahlParseError } from "../src/errors.js";
 import * as fx from "./fixtures.js";
 
@@ -188,4 +188,23 @@ test("parseCsvRows cuts fields out as slices: the same rows as before for quotes
   assert.deepEqual(parseCsvRows('""""'), [['"']]);
   assert.deepEqual(parseCsvRows("a,b\n", ","), [["a", "b"]]);
   assert.deepEqual(parseCsvRows("a;b", "::"), [["a;b"]]);
+});
+
+test("parseCsvRows stops at a row and a cell budget, with headroom over the largest published file", () => {
+  // The largest file (kerg2) has about 15 600 rows of 19 cells; one row array per line break
+  // cost ~195 bytes, so a 4 MB answer of line breaks aborted a 512 MB heap.
+  assert.equal(MAX_CSV_ROWS, 200_000);
+  assert.equal(MAX_CSV_CELLS, 4_000_000);
+  const rows = (csv: string): number => parseCsvRows(csv).length;
+  assert.equal(rows("a;b\n".repeat(MAX_CSV_ROWS)), MAX_CSV_ROWS);
+  assert.equal(rows(`${";".repeat(MAX_CSV_CELLS - 1)}\n`), 1);
+  for (const [label, csv, message] of [
+    ["line breaks", `${"\n".repeat(MAX_CSV_ROWS)}x`, /^Malformed CSV: more than 200000 rows, more than any published file has\.$/],
+    ["rows", "a;b\n".repeat(MAX_CSV_ROWS + 1), /more than 200000 rows/],
+    ["cells", `${";".repeat(MAX_CSV_CELLS)}\n`, /^Malformed CSV: more than 4000000 cells, more than any published file has\.$/],
+  ] as const) {
+    assert.throws(() => parseCsvRows(csv), (e: unknown) => e instanceof BundeswahlParseError && message.test(e.message), label);
+  }
+  // A long run of CRs inside a field is one field, not one part per CR.
+  assert.deepEqual(parseCsvRows(`a${"\r".repeat(1000)}b;c\n`), [["ab", "c"]]);
 });

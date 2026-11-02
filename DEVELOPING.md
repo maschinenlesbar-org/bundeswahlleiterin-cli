@@ -214,7 +214,11 @@ the body.
 - **`parseCsvRows(text, delimiter=';')`** — an RFC-4180-ish tokenizer: it strips the
   UTF-8 BOM and understands double-quoted fields, `""` escapes, and delimiters/
   newlines inside quotes (more than these files need, but correct if a field ever
-  contains a `;`). A trailing newline does not produce a spurious empty row.
+  contains a `;`). A trailing newline does not produce a spurious empty row. It stops with a
+  `BundeswahlParseError` past `MAX_CSV_ROWS` (200 000 rows, blank lines included) or
+  `MAX_CSV_CELLS` (4 000 000 cells), both exported: far more than the largest published file
+  (kerg2, about 15 600 rows of 19 cells), and each row is an allocation, so a 4 MB answer of
+  line breaks no longer aborts a 512 MB heap (`apps/cli/test/hostile-answers.test.ts`).
 - **`parseCsv(text, { headerColumns })`** — skips the human-readable preamble to
   the header row, the first row that contains at least half (and at least two) of the
   expected column names in any position (`headerMatchThreshold`), then returns

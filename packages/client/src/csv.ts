@@ -14,6 +14,16 @@ function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
+/**
+ * The most rows (line breaks, blank ones included) and cells one answer may have: far more than
+ * the largest published file (kerg2, about 15 600 rows of 19 cells). Each row and cell is an
+ * allocation, about 195 bytes per line break, so without a budget a 4 MB answer of line breaks
+ * (under the 100 MiB size cap) aborted a 512 MB heap, an error no caller can catch. Past it, the
+ * tokenizer stops with a BundeswahlParseError before the arrays grow further.
+ */
+export const MAX_CSV_ROWS = 200_000;
+export const MAX_CSV_CELLS = 4_000_000;
+
 const QUOTE = 0x22;
 const LF = 0x0a;
 const CR = 0x0d;
@@ -27,6 +37,7 @@ const CR = 0x0d;
  * the delimiter, CR, LF) and joined once, never built one character at a time: `field += ch`
  * made a rope of one piece per character, and a 20 MB cell (a hostile or broken answer under
  * the size cap) took the process past a 512 MB heap and crashed it before anything was printed.
+ * More than MAX_CSV_ROWS rows or MAX_CSV_CELLS cells is a BundeswahlParseError.
  */
 export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   const rows: string[][] = [];
@@ -38,11 +49,24 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   const delim = delimiter.length === 1 ? delimiter.charCodeAt(0) : -1;
   // `from` is where the text not yet taken into `parts` starts.
   let from = 0;
+  let cells = 0;
   const endField = (at: number): string => {
     parts.push(src.slice(from, at));
     const field = parts.length === 1 ? (parts[0] as string) : parts.join("");
     parts = [];
     return field;
+  };
+  const pushCell = (field: string): void => {
+    if (++cells > MAX_CSV_CELLS) {
+      throw new BundeswahlParseError(`Malformed CSV: more than ${MAX_CSV_CELLS} cells, more than any published file has.`);
+    }
+    row.push(field);
+  };
+  const pushRow = (done: string[]): void => {
+    if (rows.length >= MAX_CSV_ROWS) {
+      throw new BundeswahlParseError(`Malformed CSV: more than ${MAX_CSV_ROWS} rows, more than any published file has.`);
+    }
+    rows.push(done);
   };
 
   for (let i = 0; i < src.length; i++) {
@@ -65,16 +89,16 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
       inQuotes = true;
       from = i + 1;
     } else if (c === delim) {
-      row.push(endField(i));
+      pushCell(endField(i));
       from = i + 1;
     } else if (c === LF) {
-      row.push(endField(i));
-      rows.push(row);
+      pushCell(endField(i));
+      pushRow(row);
       row = [];
       from = i + 1;
     } else if (c === CR) {
-      // swallow — the following \n (or EOF) ends the row
-      parts.push(src.slice(from, i));
+      // swallow — the following \n (or EOF) ends the row; a run of CRs adds no empty parts
+      if (i > from) parts.push(src.slice(from, i));
       from = i + 1;
     }
   }
@@ -92,8 +116,8 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   // Flush the last field/row unless the input ended exactly on a newline.
   const field = endField(src.length);
   if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
+    pushCell(field);
+    pushRow(row);
   }
   return rows;
 }

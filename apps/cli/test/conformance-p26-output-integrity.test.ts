@@ -30,10 +30,14 @@ const outputArgv = (base: string, file: string, force: boolean): string[] => [
 const stdoutArgv = (base: string): string[] => ["--base-url", base, "--max-retries", "0", "parties"];
 /**
  * An answer for that command of about `items` × 20 bytes, as the server sends it: the parties CSV
- * file with `items` more parties before its closing "Übrige" row (the file's own four rows stay).
+ * file with one more party per 10 items (its name as long as 10 of them) before its closing "Übrige" row
+ * (the file's own four rows stay). Not one row per item: the client refuses a file of more than
+ * MAX_CSV_ROWS (200 000) rows, far more than any published file has, and 1 000 000 items is the
+ * size of the answer P26 needs, not its row count.
  */
+const ROWS_PER_ITEM = 1 / 10;
 const answerOf = (items: number): { body: string; contentType: string } => {
-  const extra = Array.from({ length: items }, (_, i) => `${1000 + i};PARTEI;Partei;P;P${i}\n`).join("");
+  const extra = Array.from({ length: Math.ceil(items * ROWS_PER_ITEM) }, (_, i) => `${1000 + i};PARTEI;Partei;P;${`P${i}`.padEnd(250, "x")}\n`).join("");
   return { body: partiesCsv.replace("28;UEBRIGE;", `${extra}28;UEBRIGE;`), contentType: "text/csv" };
 };
 /** An answer of about 200 kB. */
@@ -41,7 +45,7 @@ const bigAnswer = (): { body: string; contentType: string } => answerOf(10000);
 /** Whether `text` is the whole of what the CLI writes for `answerOf(items)`: its parties and the file's own four. */
 const complete = (text: string, items: number): boolean => {
   try {
-    return (JSON.parse(text) as unknown[]).length === items + 4;
+    return (JSON.parse(text) as unknown[]).length === Math.ceil(items * ROWS_PER_ITEM) + 4;
   } catch {
     return false;
   }

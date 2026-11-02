@@ -76,3 +76,12 @@ test("a huge invalid cell on an error path ends in one ERROR record within a sma
     oneApiError(await runWithAnswer(command, body, 512), label, message);
   }
 });
+
+test("an answer of millions of line breaks ends in one ERROR record within a small heap", STARTS_A_PROCESS, async () => {
+  // 4 000 001 bytes: one row array per line break aborted a 512 MB heap; the tokenizer now
+  // stops at its row budget.
+  const body = `${"\n".repeat(4_000_000)}x`;
+  for (const command of ["parties", "results"]) {
+    oneApiError(await runWithAnswer(command, body, 512), command, /Malformed CSV: more than 200000 rows/);
+  }
+});
