@@ -256,7 +256,10 @@ so it is a `BundeswahlParseError` instead of partial data or `[]` with exit 0:
 - `results` (kerg2): every area ends with its two "Übrige" rows, so the file's last row is
   an "Übrige" Zweitstimme row; every area has exactly one "Wahlberechtigte" row, and they
   add up — the Bund's is the sum of the 16 Länder's, each Land's the sum of its
-  Wahlkreise' (`UegGebietsnummer`). A cut at an area boundary breaks a sum.
+  Wahlkreise' (`UegGebietsnummer`). A cut at an area boundary breaks a sum. A file with more
+  than 16 Länder or 299 Wahlkreise (`BTW2025_WAHLKREISE`) is refused before any sum, and the
+  Wahlkreise are summed per Land in one pass, so a hostile answer of many areas costs linear
+  time (a scan per Land held 80 000 of them for 20 s, after the body had arrived).
 - `parties`: the list ends with the "Übrige" group (`Gruppenart_XML` `UEBRIGE`).
 - `wahlkreise`: the file has no closing row, so the election's own size is the check:
   Wahlkreise 1–299 (`BTW2025_WAHLKREISE`), each once.

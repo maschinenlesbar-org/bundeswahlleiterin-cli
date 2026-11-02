@@ -399,3 +399,36 @@ test("every parse error of a dataset names the request: method and URL (D9)", as
     );
   }
 });
+
+test("a results file with more Länder or Wahlkreise than the election has is refused at once, in linear time", async () => {
+  const header = fx.kerg2Csv.split("\n")[5]!;
+  // Every count empty, so every sum is 0 and only the area count can tell (the audit's answer:
+  // 80 000 Länder held the process for 20 s, quadratic, after the body arrived).
+  const eligible = (art: string, nr: string, ueg = ""): string => `;;${art};${nr};;${ueg};;System-Gruppe;Wahlberechtigte;;;;;;;;;;`;
+  const body = (areas: string[]): string =>
+    [header, eligible("Bund", "99"), ...areas, ";;Bund;99;;;;System-Gruppe;Übrige;;2;;;;;;;;", ""].join("\n");
+  const n = 20_000;
+  const cases: Array<[string, string, RegExp]> = [
+    ["many Länder", body(Array.from({ length: n }, (_, i) => eligible("Land", String(100 + i)))), new RegExp(`it has ${n} Länder and 0 Wahlkreise, more than the election`)],
+    [
+      "many Länder and Wahlkreise",
+      body(Array.from({ length: n }, (_, i) => [eligible("Land", String(100 + i)), eligible("Wahlkreis", String(100_000 + i), String(100 + i))]).flat()),
+      new RegExp(`it has ${n} Länder and ${n} Wahlkreise, more than the election`),
+    ],
+    ["300 Wahlkreise", body([eligible("Land", "1"), ...Array.from({ length: 300 }, (_, i) => eligible("Wahlkreis", String(1 + i), "01"))]), /it has 1 Länder and 300 Wahlkreise, more than the election/],
+  ];
+  for (const [label, csv, message] of cases) {
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    const started = performance.now();
+    await assert.rejects(() => c.results(), (e: unknown) => e instanceof BundeswahlParseError && message.test(e.message), label);
+    assert.ok(performance.now() - started < 1000, `${label}: ${Math.round(performance.now() - started)} ms`);
+  }
+  // The election's own size passes: 16 Länder and 299 Wahlkreise, summed by their Land number
+  // (leading zeros ignored, as "01" and "1" name one Land).
+  const full = body([
+    ...Array.from({ length: 16 }, (_, i) => eligible("Land", String(i + 1).padStart(2, "0"))),
+    ...Array.from({ length: 299 }, (_, i) => eligible("Wahlkreis", String(i + 1).padStart(3, "0"), String((i % 16) + 1))),
+  ]);
+  const ok = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(full)).transport });
+  assert.equal((await ok.results({ areaType: "Land" })).length, 16);
+});

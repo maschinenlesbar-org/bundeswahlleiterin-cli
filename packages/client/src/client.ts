@@ -51,6 +51,9 @@ export const BTW2025 = {
 /** The number of Wahlkreise (constituencies) of the Bundestagswahl 2025, numbered 1–299. */
 export const BTW2025_WAHLKREISE = 299;
 
+/** The number of Länder, the areas between the Bund and the Wahlkreise in the results. */
+const BTW2025_LAENDER = 16;
+
 /** Options for the client (engine options only — the open data needs no auth). */
 export type BundeswahlClientOptions = EngineOptions;
 
@@ -100,9 +103,14 @@ function isNumeric(value: string): boolean {
   return /^\d+$/.test(value.trim());
 }
 
+/** An area/Land number without its leading zeros, so "005" and "5" are one key. */
+function numberKey(n: string): string {
+  return n.trim().replace(/^0+/, "");
+}
+
 /** Compare two area/Land numbers ignoring leading zeros, so "005" == "5". */
 function sameNumber(a: string, b: string): boolean {
-  return a.trim().replace(/^0+/, "") === b.trim().replace(/^0+/, "");
+  return numberKey(a) === numberKey(b);
 }
 
 /** Build a header-name → column-index lookup so mapping survives column reordering. */
@@ -183,12 +191,23 @@ function assertCompleteResults(rows: readonly ResultRow[], request: string): voi
   if (bund.length !== 1) throw truncated(`it has ${bund.length} Bund areas, not 1`);
   const sumOf = (children: readonly ResultRow[]): number => children.reduce((n, c) => n + (c.anzahl ?? 0), 0);
   const laender = areas.filter((a) => a.gebietsart === "Land");
+  const kreise = areas.filter((a) => a.gebietsart === "Wahlkreis");
+  // More areas than the election has is not the published file, whatever the sums say.
+  if (laender.length > BTW2025_LAENDER || kreise.length > BTW2025_WAHLKREISE) {
+    throw truncated(`it has ${laender.length} Länder and ${kreise.length} Wahlkreise, more than the election has`);
+  }
   if (sumOf(laender) !== (bund[0]!.anzahl ?? 0)) {
     throw truncated("the Länder's Wahlberechtigte don't add up to the Bund's");
   }
+  // One pass: the Wahlkreise' sums by their Land's number, leading zeros ignored (sameNumber).
+  // A scan of all areas per Land was quadratic in a hostile answer's area count.
+  const kreisSums = new Map<string, number>();
+  for (const k of kreise) {
+    const key = numberKey(k.ueGebietsnummer);
+    kreisSums.set(key, (kreisSums.get(key) ?? 0) + (k.anzahl ?? 0));
+  }
   for (const land of laender) {
-    const kreise = areas.filter((a) => a.gebietsart === "Wahlkreis" && sameNumber(a.ueGebietsnummer, land.gebietsnummer));
-    if (sumOf(kreise) !== (land.anzahl ?? 0)) {
+    if ((kreisSums.get(numberKey(land.gebietsnummer)) ?? 0) !== (land.anzahl ?? 0)) {
       throw truncated(`the Wahlkreise of ${cutForMessage(sanitizeServerText(land.gebietsname))} don't add up to the Land's Wahlberechtigte`);
     }
   }
