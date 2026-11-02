@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TextDecoder } from "node:util";
+import { TextDecoder, inspect } from "node:util";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, sanitizeServerText, validateBaseUrl } from "../src/engine.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, redactUrl, toWellFormed } from "../src/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, cutForMessage, cutText, echoedCredentialForms, redactUrl, toWellFormed } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -576,4 +576,35 @@ test("sanitizeServerText reads a bounded prefix and drops what the per-character
   const ST8 = String.fromCharCode(0x9c);
   assert.equal(sanitizeServerText(`a${OSC8}0;x${OSC8}0;t${ST8}b`), "a0;xb");
   assert.equal(sanitizeServerText(`a${ESC}]0;x${ESC}]0;t${BEL}b`), "a0;xb");
+});
+
+test("echoedCredentialForms treats a userinfo without a password as a token (Basic `TOKEN:`)", () => {
+  const basic = (pair: string): string => Buffer.from(pair, "utf8").toString("base64");
+  assert.deepEqual(echoedCredentialForms("alice:s3cret"), [basic("alice:s3cret"), "alice:s3cret", "s3cret"]);
+  assert.deepEqual(echoedCredentialForms("T0ken"), [basic("T0ken:"), "T0ken:", "T0ken"]);
+  assert.deepEqual(echoedCredentialForms("T0ken:"), [basic("T0ken:"), "T0ken:", "T0ken"]);
+  assert.deepEqual(echoedCredentialForms("T%C3%B6k"), [basic("Tök:"), "Tök:"]); // short: not alone
+  assert.deepEqual(echoedCredentialForms(":pw12"), [basic(":pw12"), ":pw12", "pw12"]);
+  assert.deepEqual(echoedCredentialForms(""), []);
+  assert.deepEqual(echoedCredentialForms(":"), []);
+});
+
+test("a userinfo without a password is a token: scrubbed from library errors in every echoed form", async () => {
+  const TOKEN = "T0kenS3cret";
+  const basicValue = Buffer.from(`${TOKEN}:`, "utf8").toString("base64");
+  for (const baseUrl of [`https://${TOKEN}@mirror.example`, `https://${TOKEN}:@mirror.example`]) {
+    for (const echo of [`bad token ${TOKEN}`, `Authorization: Basic ${basicValue}`, `user ${TOKEN}: unknown`]) {
+      const mt = makeMockTransport(() => rawResponse(echo, "text/plain", 401));
+      const e = new RequestEngine({ baseUrl, transport: mt.transport, maxRetries: 0 });
+      await assert.rejects(
+        () => e.getText("/x.csv"),
+        (err) => {
+          assert.ok(err instanceof BundeswahlApiError && /^HTTP 401 /.test(err.message), String(err));
+          const seen = [inspect(err, { depth: 10, showHidden: true }), err.message, err.detail, err.body, err.url].map(String).join("\n");
+          assert.ok(!seen.includes(TOKEN) && !seen.includes(basicValue), `${baseUrl} ${echo}: ${seen.slice(0, 2000)}`);
+          return true;
+        },
+      );
+    }
+  }
 });

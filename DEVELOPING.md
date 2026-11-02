@@ -112,8 +112,10 @@ every line printed on stdout and every log record on stderr — commander's usag
 echo rejected values (`argument '…' is invalid`, `unknown command '…'`, `too many
 arguments … got 1: …`). The forms a server echoes a userinfo back in are replaced too:
 the `Basic` value and the decoded `user:password` on stdout and stderr, the password
-alone (4 characters or more) on stderr only, since it may well occur in the data. The
-log replaces them in each record's *message*, before the record is cut and escaped, and
+alone (4 characters or more) on stderr only, since it may well occur in the data. A
+userinfo without a password (`https://TOKEN@host`, `https://TOKEN:@host`, which Node sends
+as Basic `TOKEN:`) is a token: its forms are the Basic value of `TOKEN:`, `TOKEN:` and the
+token alone, replaced the same way. The log replaces them in each record's *message*, before the record is cut and escaped, and
 writes it to the raw stderr: the frame (time, level, topic) is never touched, and a
 password with DEL, C1 or bidi characters is matched in its raw form.
 `apps/cli/test/conformance-p1-cli-redaction.test.ts` checks ten passwords in seven URL shapes at
@@ -132,7 +134,8 @@ The library keeps them out of what a caller logs, too. The engine holds the base
 a real `#private` field (so `console.log(client)`, `util.inspect` and `JSON.stringify`
 never show it) next to its userinfo, raw and percent-decoded, and the forms a server
 echoes it back in (the `Basic` value, the decoded `user:password`, the password alone
-from 4 characters: `echoedCredentialForms`), and scrubs them from error bodies
+from 4 characters, and for a userinfo without a password the user name, a token, in the same
+forms: `echoedCredentialForms`), and scrubs them from error bodies
 (`BundeswahlApiError.body`/`detail`), transport error text and the `cause` chain. `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
 a custom transport throws (a string, fetch's `TypeError` naming the URL) reaches the
 caller as a `BundeswahlNetworkError` with the original, scrubbed, as its `cause`.

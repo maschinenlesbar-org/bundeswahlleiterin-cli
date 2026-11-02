@@ -6,7 +6,7 @@ import { forbidRepeatedOptions } from "../src/cli/shared.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { nodeFiles, refuseOverwrite, type CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
-import { makeMockTransport, csvResponse, rawResponse, untimed } from "./helpers.js";
+import { makeMockTransport, csvResponse, parity, rawResponse, untimed } from "./helpers.js";
 import * as fx from "@maschinenlesbar.org/bundeswahlleiterin-client/test/fixtures";
 import { credentialsIn } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
 
@@ -719,4 +719,25 @@ test("the search for URLs inside an argument is linear: a 1 MB argument is read 
   const many = Array.from({ length: 100 }, (_, i) => ` https://u${i}:pw${i}xyz@h/`).join("");
   const err = redactionFor(["results", "--party", many]).err(many);
   assert.ok(!err.includes("pw0xyz") && !err.includes("pw63xyz"), err.slice(0, 200));
+});
+
+test("a token in --base-url (a userinfo without a password) is redacted from what the CLI prints, on stderr and stdout", async () => {
+  const TOKEN = "T0kenS3cret";
+  const basicValue = Buffer.from(`${TOKEN}:`, "utf8").toString("base64");
+  const base = `https://${TOKEN}@mirror.example`;
+  // An error answer that echoes the token: stderr.
+  const failed = await parity(["--base-url", base, "--max-retries", "0", "parties"], (t) => new BundeswahlClient({ baseUrl: base, transport: t, maxRetries: 0 }).parties(), () =>
+    rawResponse(`bad token ${TOKEN}`, "text/plain", 401),
+  );
+  assert.notEqual(failed.cli.code, 0);
+  assert.match(failed.cli.err, /HTTP 401/);
+  assert.ok(!failed.cli.err.includes(TOKEN), failed.cli.err);
+  // A 2xx answer that echoes the Basic value and `TOKEN:`: stdout.
+  const name = `Basic ${basicValue} for ${TOKEN}:x`;
+  const echoed = await parity(["--base-url", base, "parties"], (t) => new BundeswahlClient({ baseUrl: base, transport: t }).parties(), () =>
+    csvResponse(fx.partiesCsv.replace("Wahlberechtigte;Wahlberechtigte", `Wahlberechtigte;${name}`)),
+  );
+  assert.equal(echoed.cli.code, 0, echoed.cli.err);
+  assert.ok(echoed.lib.ok && JSON.stringify(echoed.lib.value).includes(name), "the library returns the data as it is");
+  assert.ok(!echoed.cli.out.includes(basicValue) && !echoed.cli.out.includes(`${TOKEN}:`), echoed.cli.out);
 });
