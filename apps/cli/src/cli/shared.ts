@@ -332,7 +332,13 @@ export function checkOutputTarget(deps: CliDeps, global: GlobalOptions): void {
   const path = fileOf(global);
   if (path === undefined) return;
   const files = deps.files ?? nodeFiles;
-  const state = files.state(path);
+  let state: ReturnType<typeof files.state>;
+  try {
+    state = files.state(path);
+  } catch (err) {
+    // A path that can't be told (EACCES on the way) is refused as that, before any request.
+    throw new BundeswahlValidationError(err instanceof Error ? err.message : String(err));
+  }
   if (state === "directory") throw new BundeswahlValidationError(isDirectoryMessage(path));
   if (state === "stream") return;
   if (state === "exists" && global.force !== true) throw new BundeswahlValidationError(refuseOverwrite(path));

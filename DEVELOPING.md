@@ -547,7 +547,8 @@ bytes that are not valid in the charset were replaced with U+FFFD), `http` (the 
 `output` (`Wrote N bytes` after `-o`, or any failure to write that file: an `OutputError`, and a
 stdout write error). A refused `-o` target — `--force` without `-o`, a directory, an existing
 file without `--force`, a file whose directory is missing, not a directory or not writable, a
-link loop with `--force` — is checked before any request (`checkOutputTarget`,
+link loop or a link another user made in a shared directory with `--force`, a path that can't be
+inspected (EACCES on the way) — is checked before any request (`checkOutputTarget`,
 `OutputFiles.parentProblem`) and is a usage error of `cli` (exit 2); a file that appears during
 the request is still refused at the write, as an `output` record (exit 1). The file seam
 (`CliDeps.files`, `OutputFiles`; the real one is `nodeFiles` in `io.ts`) writes atomically: a
@@ -555,7 +556,13 @@ temporary file beside the target (named within NAME_MAX), created exclusively an
 it, so a failed write leaves the old file and no temporary one; without `--force` the name is
 claimed first with an exclusive create, and removed again if the write fails; `--force` keeps
 the old file's mode and writes through a symlink, also a dangling one, whose target is created
-(`linkTarget`). SIGINT, SIGTERM and SIGHUP during a file write remove the claim and the
+(`linkTarget`), but only a link the caller or the directory's owner made, or one in a directory
+nobody else can write to (neither sticky nor writable by others): the rule of Linux's
+`fs.protected_symlinks`, checked at every hop. The CLI resolves links itself and renames onto
+the target, so the kernel never sees them and its own check can't apply; a link another user
+planted in `/tmp` is refused (EACCES, naming the link). The owners are a seam (`LinkOwners`,
+`nodeFilesFor(owners)`; `nodeFiles` is the process's user), so `apps/cli/test/output-links.test.ts`
+plays another user without root. SIGINT, SIGTERM and SIGHUP during a file write remove the claim and the
 temporary file and exit `130`, `143`, `129`. A stream (`nodeFiles.state` → `"stream"`: a
 character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place, with no
 claim, no rename and no `--force` needed. Code logs through `logOf(deps)` and never writes
