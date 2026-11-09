@@ -510,8 +510,7 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   token userinfo scrubbed, a backslash or a scheme not followed by `//` and the host refused,
   requests to the parsed host, the stdout redaction linear and covering glued URLs), P30 `-o`
   and links (`--force` follows no other user's link in a shared directory, EACCES isn't "exists",
-  a stream is checked on the descriptor; its "still follows" case reads back `[{ "id": "a1" }]`
-  and is skipped, `output-links.test.ts` runs it with the parties), P31 the release pipeline
+  a stream is checked on the descriptor; `written` is the parties the CLI writes), P31 the release pipeline
   (the SBOM tool locked in `tools/sbom/`, three jobs, only `gh` in the writing one). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 

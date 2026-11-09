@@ -11,6 +11,7 @@
 // without -o sets HAS_OUTPUT_OPTION to false and the tests are skipped. Shared across the *-cli
 // repos; only the adapter differs.
 
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +19,6 @@ import { join } from "node:path";
 import type { HttpRequest } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
 
 // ---- adapter (per repo) -------------------------------------------------------------
-import { test as nodeTest } from "node:test";
 import { run as cliRun } from "../src/cli/run.js";
 import { nodeFilesFor, type CliDeps, type LinkOwners } from "../src/cli/io.js";
 import { BundeswahlClient as Client } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
@@ -26,21 +26,19 @@ import { partiesCsv } from "@maschinenlesbar.org/bundeswahlleiterin-client/test/
 import { csvResponse, makeMockTransport, untimed } from "./helpers.js";
 /** `run`, taking the deps the body passes: this CLI reads no environment, so `env` is dropped. */
 const run = (argv: string[], { env: _env, ...deps }: CliDeps & { env: Record<string, string> }): Promise<number> => cliRun(argv, deps);
-/**
- * Every command prints the API's rows with their fixed fields, so no answer is written as
- * `[{ "id": "a1" }]`, which "--force still follows the caller's own links …" reads back: that test
- * is skipped here and runs in output-links.test.ts, reading the parties written instead.
- */
-const test: typeof nodeTest = ((name: string, options: { skip?: boolean | string }, fn: () => void | Promise<void>) =>
-  name.startsWith("P30: --force still follows")
-    ? nodeTest(name, { ...options, skip: "no command writes [{ id: \"a1\" }]: output-links.test.ts checks it with the parties" }, fn)
-    : nodeTest(name, options, fn)) as typeof nodeTest;
 /** Whether the CLI has `-o` (see P26). */
 const HAS_OUTPUT_OPTION = true;
 /** argv that writes the answer of one GET to `file`. */
 const outputArgv = (file: string, force: boolean): string[] => ["--max-retries", "0", "-o", file, ...(force ? ["--force"] : []), "parties"];
 /** A 2xx answer for that GET. */
 const answer = () => csvResponse(partiesCsv);
+/** What the CLI writes to the file for that answer, parsed as JSON (read back after a followed link): the parties of `partiesCsv`. */
+const written: unknown = [
+  { gruppenschluessel: "100", gruppenartXml: "SYSTEM_GRUPPE", gruppenartCsv: "System-Gruppe", name: "Wahlberechtigte", kurz: "Wahlberechtigte" },
+  { gruppenschluessel: "2", gruppenartXml: "PARTEI", gruppenartCsv: "Partei", name: "Sozialdemokratische Partei Deutschlands", kurz: "SPD" },
+  { gruppenschluessel: "3", gruppenartXml: "PARTEI", gruppenartCsv: "Partei", name: "BÜNDNIS 90/DIE GRÜNEN", kurz: "GRÜNE" },
+  { gruppenschluessel: "28", gruppenartXml: "UEBRIGE", gruppenartCsv: "System-Gruppe", name: "Übrige", kurz: "Übrige" },
+];
 /** The exit code of a usage error in this repo (commander's default is 1; most repos use 2). */
 const USAGE_EXIT = 2;
 // --------------------------------------------------------------------------------------
@@ -143,7 +141,7 @@ test("P30: --force still follows the caller's own links, the directory owner's, 
     try {
       const o = await runWith(nodeFilesFor(who(t)), outputArgv(t.link, true));
       assert.equal(o.code, 0, `${label}: ${o.err}`);
-      assert.deepEqual(JSON.parse(readFileSync(t.victim, "utf8")), [{ id: "a1" }], label);
+      assert.deepEqual(JSON.parse(readFileSync(t.victim, "utf8")), written, label);
       assert.ok(lstatSync(t.link).isSymbolicLink(), label);
     } finally {
       t.done();
