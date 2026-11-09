@@ -161,7 +161,7 @@ test("P27: an answer in two million one-byte chunks is read within a small heap"
   const wire = Buffer.from(
     "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ntransfer-encoding: chunked\r\nconnection: close\r\n\r\n" +
       chunk(head) + "1\r\na\r\n".repeat(2_000_000) + chunk(tail) + "0\r\n\r\n",
-    "latin1",
+    "utf8", // as Buffer.byteLength counts the chunk sizes, so a non-ASCII body fits too
   );
   const run = await runWithRawAnswer(wire, 256, ["--compact"]);
   noCrash(run, "tiny chunks");
