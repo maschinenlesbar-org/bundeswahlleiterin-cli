@@ -68,11 +68,12 @@ export const headerNameProblem: Problem = (value) =>
     : "Expected a header name made of token characters (letters, digits and !#$%&'*+-.^_`|~).";
 
 /**
- * A base URL. Data paths are appended to it as a string, so its exact text matters:
+ * A base URL. Data paths are appended to it as WHATWG parses it (`new URL(value).href`), so
+ * every reader of the value has to agree with that parse:
  *
  * - blank is refused (only an omitted base URL selects the default host);
- * - surrounding whitespace is refused: `new URL()` trims it silently, but the
- *   engine uses the raw value, so `"https://h/ "` would request `/%20/dam/...`;
+ * - surrounding whitespace is refused: `new URL()` trims it silently, so the URL requested
+ *   would not be the one typed;
  * - only `http:`/`https:` are accepted: a `file:`/`ftp:` value fails here, as a
  *   configuration mistake, rather than deep in a (possibly custom) transport;
  * - a `?` or `#` would swallow every path (`http://h/?x` requests `/?x/dam/...`,
@@ -82,7 +83,12 @@ export const headerNameProblem: Problem = (value) =>
  * - userinfo (`user:pass@`) is allowed, but it must decode: Node decodes it into the
  *   Authorization header and fails at request time ("URI malformed", reported as a
  *   network error) on a `%` that isn't an escape, so that is a usage error here
- *   (write a literal `%` as `%25`).
+ *   (write a literal `%` as `%25`);
+ * - a backslash is refused: WHATWG reads it as "/" in an http(s) URL, so it ends the host
+ *   (`https://u:pw@a.example\@b.example` sends `u:pw` to a.example), where a reader of the
+ *   text would see another;
+ * - a scheme not followed by exactly `//` and the host (`http:host`, `http:/host`,
+ *   `http:///host`) is refused: WHATWG repairs it into `http://host` silently.
  *
  * The reasons never echo the URL, so a credential in it cannot leak; error messages
  * redact the userinfo.
@@ -105,6 +111,9 @@ export const baseUrlProblem: Problem = (value) => {
     return "Only http: and https: base URLs are supported.";
   }
   if (/[?#]/.test(value)) return "A base URL cannot have a query (?) or fragment (#).";
+  // WHATWG reads a "\" in an http(s) URL as "/", so it ends the host: in
+  // `https://u:pw@a.example\@b.example` every reader of the base URL has to agree where.
+  if (value.includes("\\")) return 'A base URL cannot contain a backslash (\\); write "/" instead.';
   for (const part of [url.username, url.password]) {
     try {
       decodeURIComponent(part);
@@ -112,6 +121,9 @@ export const baseUrlProblem: Problem = (value) => {
       return 'The user name or password has a "%" that is not followed by two hex digits; write a literal "%" as %25.';
     }
   }
+  // WHATWG skips any slashes after "http:" and repairs `http:host`, `http:/host` and
+  // `http:///host` into `http://host` silently: the host requested would not be the one typed.
+  if (!/^https?:\/\/[^/]/i.test(value)) return 'Expected an absolute http(s) URL ("https://" and the host).';
   return undefined;
 };
 

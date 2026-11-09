@@ -13,7 +13,7 @@ bundeswahl [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--base-url <url>` | data host base URL (only `http:`/`https:` accepted; no query or fragment, no surrounding whitespace; a literal `%` in a password is written `%25`) |
+| `--base-url <url>` | data host base URL (only `http:`/`https:` accepted; written `https://` and the host, no query or fragment, no backslash, no surrounding whitespace; a literal `%` in a password is written `%25`) |
 | `--timeout <ms>` | time limit per request in ms, whole response included (0 = no timeout; at most 2147483647); it bounds each attempt, the waits between retries come on top |
 | `--user-agent <ua>` | User-Agent header value |
 | `--max-retries <n>` | retries for transient 429/503 responses and reset connections (0..10; each waits 200 ms × attempt, or a 429/503's `Retry-After` when that is longer, up to 30 s — a longer one is not retried and the error names the requested wait; refused connections, DNS failures and timeouts are not retried). Each retry logs one WARN record of `bundeswahl.http` before it waits (`HTTP 503 from host: retry 1 of 3 in 2 s`). |

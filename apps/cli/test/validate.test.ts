@@ -101,7 +101,22 @@ test("baseUrlProblem: blank, surrounding whitespace, unparsable, non-http(s), qu
   assert.equal(baseUrlProblem("https://h.test/?x=1"), "A base URL cannot have a query (?) or fragment (#).");
   assert.equal(baseUrlProblem("https://h.test#f"), "A base URL cannot have a query (?) or fragment (#).");
   assert.equal(baseUrlProblem(42), "Expected a string.");
-  for (const ok of ["https://h.test", "http://h.test/m/", "https://u:p@h.test/m"]) {
+  for (const ok of ["https://h.test", "http://h.test/m/", "https://u:p@h.test/m", "HTTPS://H.test/v1", "http://u:pw@h.test:8080"]) {
     assert.equal(baseUrlProblem(ok), undefined, ok);
+  }
+});
+
+test("baseUrlProblem: a backslash, or a scheme not followed by exactly // and the host, is refused without echoing the value (security audit, F/F4)", () => {
+  for (const [value, reason] of [
+    ["https://u:pw@a.example\\@b.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["https://h.example/a\\b", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["https:\\\\h.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["http:h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["https:/h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["http:///h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["http:u:s3cret@h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["HTTPS:h.example/v1", 'Expected an absolute http(s) URL ("https://" and the host).'],
+  ] as const) {
+    assert.equal(baseUrlProblem(value), reason, value);
   }
 });

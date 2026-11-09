@@ -763,3 +763,23 @@ test("the userinfo redaction of stdout is linear in the answer, and hides a URL 
   assert.equal(glued.cli.code, 0, glued.cli.err);
   assert.ok(glued.cli.out.includes("https://host://***@h and https://***@x://***@w"), glued.cli.out);
 });
+
+test("--base-url with a backslash, or a scheme not followed by exactly // and the host, is a usage error that never echoes the password (security audit, F/F3/F4)", async () => {
+  const pw = "s3cret-Pw";
+  for (const base of [
+    `https://alice:${pw}@api.example\\@evil.example`,
+    `http:alice:${pw}@127.0.0.1:9`,
+    `http:/alice:${pw}@127.0.0.1:9`,
+    `http:///alice:${pw}@127.0.0.1:9`,
+    `HTTPS:alice:${pw}@mirror.example`,
+    `https:\\\\alice:${pw}@mirror.example`,
+    `http:///alice:${pw}@mirror.example/?q=1`,
+  ]) {
+    const o = await parity(["--base-url", base, "parties"], (t) => new BundeswahlClient({ baseUrl: base, transport: t }).parties());
+    assert.equal(o.cli.code, 2, `${base}: ${o.cli.err}`);
+    assert.equal(o.cli.requests.length, 0);
+    assert.equal(o.lib.ok, false);
+    assert.equal(o.lib.requests.length, 0);
+    assert.ok(!o.cli.err.includes(pw) && !o.cli.out.includes(pw), o.cli.err);
+  }
+});

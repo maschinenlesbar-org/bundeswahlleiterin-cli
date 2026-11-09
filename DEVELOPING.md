@@ -88,12 +88,18 @@ default). The types say so (`?: T | undefined`), so a consumer compiled with
 `baseUrl` is checked in the constructor with `validateBaseUrl` (exported; the rules are
 `baseUrlProblem` in `validate.ts`, the same function the CLI's `--base-url` parser calls)
 on the raw value, before trailing slashes are stripped: a blank value, surrounding
-whitespace (which `new URL()` would trim silently while the engine concatenated the raw
-string into a `/%20/…` path), a control character, a scheme other than http(s), a query
-or fragment, or a `%` in the userinfo that isn't an escape (Node would fail to decode it
+whitespace (which `new URL()` would trim silently), a control character, a scheme other than
+http(s), a query or fragment, a backslash (WHATWG reads it as `/` and ends the host there:
+`https://u:pw@a.example\@b.example` sends `u:pw` to a.example), a scheme not followed by
+exactly `//` and the host (`http:host`, `http:/host`, `http:///host`, which WHATWG repairs into
+`http://host` silently), or a `%` in the userinfo that isn't an escape (Node would fail to decode it
 for the Authorization header at request time; write `%25`) throws
 `BundeswahlValidationError` (`Invalid baseUrl: <reason>`). Only an omitted `baseUrl`
-selects the default host.
+selects the default host. Requests go to the base URL as WHATWG parses it
+(`new URL(baseUrl).href` without trailing slashes): the host lower-cased, a default port
+dropped, the path percent-encoded where WHATWG does it, so a transport that reads the URL as
+text reaches the host every check names. `credentialsIn` reads a userinfo where WHATWG does:
+after the slashes and backslashes a special scheme skips (`http:///u:pw@h`), up to a backslash.
 
 A `user:password@` in the base URL (a mirror behind a login) never reaches the CLI's
 output. `credentialsIn(value)` finds the exact userinfo of a URL, parseable or not, and

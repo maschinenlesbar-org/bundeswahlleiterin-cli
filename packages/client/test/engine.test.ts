@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TextDecoder, inspect } from "node:util";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, sanitizeServerText, validateBaseUrl } from "../src/engine.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, TextBuilder, cutForMessage, cutText, echoedCredentialForms, redactUrl, redactUrlUserinfo, toWellFormed } from "../src/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, TextBuilder, credentialsIn, cutForMessage, cutText, echoedCredentialForms, redactUrl, redactUrlUserinfo, toWellFormed } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -716,4 +716,68 @@ test("an echo of the request URL as sent is scrubbed, a short password too (secu
   for (const text of [err.message, err.detail ?? "", err.body]) {
     assert.ok(!text.includes("p%22%C3%A4@") && !text.includes('p"ä@'), text);
   }
+});
+
+test("a base URL with a backslash, or whose scheme is not followed by // and the host, is rejected at construction, never echoing the password (security audit, F/F4)", () => {
+  // WHATWG ends an http(s) authority at "\\" and repairs `http:host`, `http:/host`, `http:///host`
+  // silently into `http://host`: the host requested would not be the one typed.
+  for (const [baseUrl, reason] of [
+    ["http:alice:s3cret@h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["https:/alice:s3cret@h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["http:///alice:s3cret@h.example", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["HTTPS:h.example/v1", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["https:\\\\alice:s3cret@h.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["https://alice:s3cret@a.example\\@b.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+  ] as const) {
+    const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+    assert.throws(
+      () => new RequestEngine({ transport: mt.transport, baseUrl }),
+      (err: unknown) => err instanceof BundeswahlValidationError && err.message === `Invalid baseUrl: ${reason}` && !err.message.includes("s3cret"),
+      baseUrl,
+    );
+    assert.equal(mt.calls.length, 0, baseUrl);
+  }
+});
+
+test("requests go to the base URL as WHATWG parses it: the host every check names (security audit, F)", async () => {
+  for (const [baseUrl, want] of [
+    ["https://API.Example:443/v1/", "https://api.example/v1/x.csv"],
+    ["https://alice:pw@api.example/v1/@evil.example", "https://alice:pw@api.example/v1/@evil.example/x.csv"],
+    ["https://h.example/a b", "https://h.example/a%20b/x.csv"],
+  ] as const) {
+    const mt = makeMockTransport(() => csvResponse("a;b\n1;2\n"));
+    await new RequestEngine({ transport: mt.transport, baseUrl }).getText("/x.csv");
+    assert.equal(mt.calls[0]?.url, want, baseUrl);
+  }
+});
+
+test("credentialsIn ends the authority of a special scheme at a backslash, as WHATWG does (security audit, F)", () => {
+  for (const scheme of ["http", "https", "HTTPS", "ws", "wss", "ftp"]) {
+    assert.deepEqual(credentialsIn(`${scheme}://u:p@a.example\\@b.example/x`), ["u:p"], scheme);
+    assert.equal(new URL(`${scheme}://u:p@a.example\\@b.example/x`).password, "p", scheme);
+  }
+  // Another scheme's authority runs on to "/", "?" or "#".
+  assert.deepEqual(credentialsIn("foo://u:p@a.example\\@b.example/x"), ["u:p@a.example\\"]);
+  assert.deepEqual(credentialsIn("https://u:p@a.example/x\\@y"), ["u:p"]);
+});
+
+test("credentialsIn skips the slashes and backslashes WHATWG skips after a special scheme (security audit, F3)", () => {
+  // `http:///u:pw@h`, `https:\\u:pw@h` and `http:u:pw@h` all carry `u:pw` for WHATWG; read
+  // after "://", the userinfo was missed, so a refused --base-url echoed the password in clear.
+  for (const value of [
+    "http:alice:pw@h.example",
+    "http:/alice:pw@h.example",
+    "http:///alice:pw@h.example/x",
+    "https:////alice:pw@h.example",
+    "HTTPS:\\\\alice:pw@h.example",
+    "wss:\\/alice:pw@h.example",
+    "ftp:alice:pw@h.example",
+  ]) {
+    assert.deepEqual(credentialsIn(value), ["alice:pw"], value);
+    assert.equal(new URL(value).password, "pw", value);
+  }
+  // Another scheme needs "//" before an authority: `foo:u:p@h` and `foo:///u:p@h` carry none.
+  assert.deepEqual(credentialsIn("foo:u:p@h.example"), []);
+  assert.deepEqual(credentialsIn("foo:///u:p@h.example"), []);
+  assert.equal(new URL("foo:///u:p@h.example").password, "");
 });
