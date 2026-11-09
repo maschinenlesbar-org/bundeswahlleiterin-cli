@@ -187,7 +187,9 @@ the size of the body it gets back. A transport may return its headers as a fetch
 object, a `Map` or a record with names in any case (`Retry-After` is read from all of
 them), and its body as a `Buffer`, any ArrayBuffer view (fetch's `Uint8Array`) or an
 `ArrayBuffer`, from any realm. Whatever a transport throws or returns that isn't a
-response (a string body, no status) becomes a `BundeswahlNetworkError`.
+response (a string body, no status) becomes a `BundeswahlNetworkError`. The built-in transport
+joins the chunks of a body as they arrive (every 1024 chunks or 64 KiB), so its memory follows
+the bytes received, not the number of chunks a server sends them in.
 `apps/cli/test/conformance-p5-transport-contract.test.ts` checks this with a never-answering
 transport, `fetch` against a silent server, a 2 MiB body and every body and header shape.
 
@@ -494,7 +496,8 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   place; `--force` through a dangling link creates its target; a 255-byte name is written; a
   signal during the request or the write leaves no claim and no temporary file), P27 big and
   odd answers (runs the built bin under `--max-old-space-size`: 20 M DEL characters in a cell
-  print escaped within 512 MB, 90 MB of them is "too large to print"; its JSON-only cases, a
+  print escaped within 512 MB, 90 MB of them is "too large to print", an answer in two million
+  one-byte chunks is read within 256 MB; its JSON-only cases, a
   flat array and a lone-surrogate escape, are skipped). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
