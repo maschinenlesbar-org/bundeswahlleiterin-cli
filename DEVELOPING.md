@@ -105,7 +105,10 @@ the `--base-url` value, which is read as if it had one; it is found anywhere in 
 linear; at most 64 per argument), not only at its start: a padded `" https://user:pw@host"`, one after a dash,
 a control character or inside a phrase reached the filter, `-o` and `--user-agent` refusals,
 the `-o` note and commander's echo. Its percent-encoded form with the `@` (as a request URL
-carries it) is replaced too.
+carries it) is replaced too. As a backstop, the userinfo of every URL in a stdout text is
+replaced by `***` (`redactUrlUserinfo`, client `errors.ts`): one linear pass over the text, a
+URL glued onto the one before it (`https://host://u:p@h`) included; the scheme regex it replaced
+was quadratic on a run of scheme characters in an answer.
 `run()` starts with `withRedactedOutput(deps, argv)`, which collects the credentials of
 every argument (and of the value part of `--opt=value`, `redactionFor`) and redacts
 every line printed on stdout and every log record on stderr — commander's usage errors

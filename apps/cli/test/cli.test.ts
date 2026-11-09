@@ -741,3 +741,25 @@ test("a token in --base-url (a userinfo without a password) is redacted from wha
   assert.ok(echoed.lib.ok && JSON.stringify(echoed.lib.value).includes(name), "the library returns the data as it is");
   assert.ok(!echoed.cli.out.includes(basicValue) && !echoed.cli.out.includes(`${TOKEN}:`), echoed.cli.out);
 });
+
+/** The parties file whose first party's name (`Gruppenname`) is `name`, a CSV quoted field when it holds a `;`. */
+const partiesNamed = (name: string): string =>
+  fx.partiesCsv.replace("100;SYSTEM_GRUPPE;System-Gruppe;Wahlberechtigte;Wahlberechtigte", `100;SYSTEM_GRUPPE;System-Gruppe;Wahlberechtigte;${name}`);
+
+test("the userinfo redaction of stdout is linear in the answer, and hides a URL glued onto the one before it (security audit, B)", async () => {
+  // With a URL with userinfo in argv every stdout text is redacted. The scheme regex took about
+  // 8 s on 200 000 characters of `a.a.…`; the linear pass takes milliseconds.
+  const base = "https://alice:s3cret-Pw@mirror.example";
+  const value = "a.".repeat(100_000);
+  const start = performance.now();
+  const long = await parity(["--base-url", base, "--compact", "parties"], () => undefined, () => csvResponse(partiesNamed(value)));
+  const ms = performance.now() - start;
+  assert.equal(long.cli.code, 0, long.cli.err);
+  assert.ok(long.cli.out.includes(value));
+  assert.ok(ms < 1500, `${Math.round(ms)} ms`);
+  const glued = await parity(["--base-url", base, "--compact", "parties"], () => undefined, () =>
+    csvResponse(partiesNamed("https://host://u:p1@h and https://u:p2@x://v:q3@w")),
+  );
+  assert.equal(glued.cli.code, 0, glued.cli.err);
+  assert.ok(glued.cli.out.includes("https://host://***@h and https://***@x://***@w"), glued.cli.out);
+});

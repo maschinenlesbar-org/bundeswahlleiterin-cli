@@ -16,6 +16,7 @@ import {
   echoedCredentialForms,
   redactCredentials,
   redactSecrets,
+  redactUrlUserinfo,
 } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/errors";
 
 /**
@@ -130,15 +131,6 @@ function valueOptionsOf(program: Command): Set<string> {
 }
 
 /**
- * Replace the userinfo of every URL in `text` with `***`, the form `redactUrl` gives
- * (`https://user:secret@host` becomes `https://***@host`). Text-based, so it also
- * covers a URL that does not parse; a backstop behind the exact-string redaction.
- */
-export function redactUserinfo(text: string): string {
-  return text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/?#']*@/gi, "$1***@");
-}
-
-/**
  * The options whose value is the base URL: a `user:password@host` given there without
  * its scheme is still a credential (anywhere else a bare `a:b@c` is not).
  */
@@ -204,7 +196,10 @@ export function redactionFor(argv: readonly string[]): Redaction {
   // Longest first, so a password never leaves half of the user:password around it.
   const echoedList = [...echoed].sort((a, b) => b.length - a.length);
   const passwordList = [...passwords].sort((a, b) => b.length - a.length);
-  const out = (text: string): string => redactSecrets(redactUserinfo(redactCredentials(text, list)), echoedList);
+  // The userinfo of every URL in the text (`https://***@host`), in one linear pass
+  // (`redactUrlUserinfo`): the scheme regex it replaces was quadratic on a run of scheme
+  // characters in an answer, and every stdout text goes through here.
+  const out = (text: string): string => redactSecrets(redactUrlUserinfo(redactCredentials(text, list)), echoedList);
   return { out, err: (text) => redactSecrets(out(text), passwordList) };
 }
 
