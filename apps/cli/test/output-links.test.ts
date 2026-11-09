@@ -1,15 +1,12 @@
-// `-o --force` and links (security audit 2026-10-27, class G; the tests of the kit's conformance
-// test P30, which rolls out to every repo in a later round): `--force` follows a link only when
-// the caller or the directory's owner made it, at every hop, wherever the directory is sticky or
-// others can write to it (the rule of Linux's fs.protected_symlinks): a link another user planted
-// in /tmp sent the answer over any file the caller could replace. The kernel never saw that link,
-// as the CLI resolves it by hand. A path that can't be inspected (EACCES) is reported as that,
-// not as an existing file. Owners are injected (`nodeFilesFor`), so no test needs a second user
-// or root. In process.
+// `-o --force` and links (security audit 2026-10-27, class G): the one test of the kit's
+// conformance test P30 that P30 skips here, since it reads the answer back as `[{ "id": "a1" }]`
+// and every command of this CLI writes the API's rows; this copy reads the parties written.
+// `--force` still follows the caller's own links, the directory owner's, and any link in a
+// directory only its owner writes. Owners are injected (`nodeFilesFor`). In process.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HttpRequest } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/http";
@@ -27,8 +24,6 @@ const answer = () => csvResponse(partiesCsv);
 /** What the file holds after a written answer: the parties, as JSON. */
 const written = (text: string): unknown => (JSON.parse(text) as Array<{ name: unknown }>)[0]?.name;
 const WRITTEN = "Wahlberechtigte";
-/** The exit code of a usage error in this repo. */
-const USAGE_EXIT = 2;
 // --------------------------------------------------------------------------------------
 
 /** The caller, and another user who planted links. */
@@ -69,51 +64,6 @@ function planted(): { dir: string; victim: string; link: string; done: () => voi
   return { dir, victim, link, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-test("--force does not follow a link another user made in a shared directory, before any request", async () => {
-  const t = planted();
-  try {
-    // A directory others can write to counts, sticky or not.
-    const open = await runWith(nodeFilesFor(owners({ [t.link]: OTHER }, { [t.dir]: { uid: ME, mode: 0o40777 } })), outputArgv(t.link, true));
-    assert.equal(open.code, USAGE_EXIT, open.err);
-    const files = nodeFilesFor(owners({ [t.link]: OTHER }, { [t.dir]: SHARED }));
-    const o = await runWith(files, outputArgv(t.link, true));
-    assert.equal(o.code, USAGE_EXIT, o.err);
-    assert.equal(o.requests.length, 0);
-    assert.match(o.err, /another user/);
-    assert.ok(o.err.includes(t.link), o.err);
-    assert.equal(readFileSync(t.victim, "utf8"), "keep me\n");
-    // At write time too (a link planted during the request): the write refuses it.
-    assert.throws(() => files.write(t.link, Buffer.from("x"), true), /another user/);
-    assert.equal(readFileSync(t.victim, "utf8"), "keep me\n");
-    assert.ok(lstatSync(t.link).isSymbolicLink());
-  } finally {
-    t.done();
-  }
-});
-
-test("the rule holds at every hop, a dangling last one included", async () => {
-  const t = planted();
-  try {
-    // own link -> a foreign link in the shared directory -> the victim
-    const inner = join(t.dir, "inner");
-    symlinkSync(t.victim, inner);
-    const outer = join(t.dir, "outer.json");
-    symlinkSync(inner, outer);
-    const chain = await runWith(nodeFilesFor(owners({ [inner]: OTHER }, { [t.dir]: SHARED })), outputArgv(outer, true));
-    assert.equal(chain.code, USAGE_EXIT, chain.err);
-    assert.equal(readFileSync(t.victim, "utf8"), "keep me\n");
-    // A foreign dangling link: the file it names is not created.
-    const dangling = join(t.dir, "dangling.json");
-    const target = join(t.dir, "created-elsewhere.json");
-    symlinkSync(target, dangling);
-    const d = await runWith(nodeFilesFor(owners({ [dangling]: OTHER }, { [t.dir]: SHARED })), outputArgv(dangling, true));
-    assert.equal(d.code, USAGE_EXIT, d.err);
-    assert.throws(() => statSync(target));
-  } finally {
-    t.done();
-  }
-});
-
 test("--force still follows the caller's own links, the directory owner's, and any link in a directory only its owner writes", async () => {
   const cases: Array<[string, (t: ReturnType<typeof planted>) => LinkOwners]> = [
     ["the caller's own link in a shared directory", (t) => owners({}, { [t.dir]: SHARED })],
@@ -131,40 +81,5 @@ test("--force still follows the caller's own links, the directory owner's, and a
     } finally {
       t.done();
     }
-  }
-});
-
-test("a path that can't be inspected is reported as such, not as an existing file", { skip: process.getuid?.() === 0 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "p30-"));
-  try {
-    const closed = join(dir, "closed");
-    mkdirSync(closed);
-    const link = join(dir, "out.json");
-    symlinkSync(join(closed, "x.json"), link);
-    chmodSync(closed, 0o000);
-    const o = await runWith(nodeFilesFor(), outputArgv(link, false));
-    assert.equal(o.code, USAGE_EXIT, o.err);
-    assert.equal(o.requests.length, 0);
-    assert.doesNotMatch(o.err, /Refusing to overwrite existing file/);
-    assert.match(o.err, /EACCES|permission/i);
-  } finally {
-    chmodSync(join(dir, "closed"), 0o700);
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("a stream target is written only when the descriptor opened is a stream (class G2)", () => {
-  const t = planted();
-  try {
-    // The path was a stream when it was classified and is a regular file (through a link) when
-    // it is opened: without --force it is refused, and the file is not touched.
-    const real = nodeFilesFor();
-    const switched = { ...real, state: () => "stream" as const };
-    assert.throws(() => switched.write(t.link, Buffer.from("appended\n"), false), /Refusing to overwrite/);
-    assert.equal(readFileSync(t.victim, "utf8"), "keep me\n");
-    // A real stream is still written in place.
-    assert.doesNotThrow(() => real.write("/dev/null", Buffer.from("x"), false));
-  } finally {
-    t.done();
   }
 });

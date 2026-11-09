@@ -502,7 +502,17 @@ datasets (`fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`.
   odd answers (runs the built bin under `--max-old-space-size`: 20 M DEL characters in a cell
   print escaped within 512 MB, 90 MB of them is "too large to print", an answer in two million
   one-byte chunks is read within 256 MB; its JSON-only cases, a
-  flat array and a lone-surrogate escape, are skipped). The test fixtures (`fixtures.ts`) are complete datasets in the sense
+  flat array and a lone-surrogate escape, are skipped), P28 hostile error answers (an
+  unterminated run of control-string introducers cleaned in linear time, a 16 MB error body in one
+  record within 128 MB, a credential spelled with JSON escapes in an error body or quoted from a
+  2xx cell scrubbed, a redirect's Location never quoted with it; its JSON-only cases, a number
+  literal with a zero run and lone-surrogate escapes, are skipped), P29 base-URL credentials (a
+  token userinfo scrubbed, a backslash or a scheme not followed by `//` and the host refused,
+  requests to the parsed host, the stdout redaction linear and covering glued URLs), P30 `-o`
+  and links (`--force` follows no other user's link in a shared directory, EACCES isn't "exists",
+  a stream is checked on the descriptor; its "still follows" case reads back `[{ "id": "a1" }]`
+  and is skipped, `output-links.test.ts` runs it with the parties), P31 the release pipeline
+  (the SBOM tool locked in `tools/sbom/`, three jobs, only `gh` in the writing one). The test fixtures (`fixtures.ts`) are complete datasets in the sense
   of the client's completeness checks.
 
 ## Continuous integration
@@ -600,7 +610,7 @@ nobody else can write to (neither sticky nor writable by others): the rule of Li
 `fs.protected_symlinks`, checked at every hop. The CLI resolves links itself and renames onto
 the target, so the kernel never sees them and its own check can't apply; a link another user
 planted in `/tmp` is refused (EACCES, naming the link). The owners are a seam (`LinkOwners`,
-`nodeFilesFor(owners)`; `nodeFiles` is the process's user), so `apps/cli/test/output-links.test.ts`
+`nodeFilesFor(owners)`; `nodeFiles` is the process's user), so `apps/cli/test/conformance-p30-output-links.test.ts`
 plays another user without root. SIGINT, SIGTERM and SIGHUP during a file write remove the claim and the
 temporary file and exit `130`, `143`, `129`. A stream (`nodeFiles.state` → `"stream"`: a
 character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place, with no
