@@ -597,7 +597,10 @@ planted in `/tmp` is refused (EACCES, naming the link). The owners are a seam (`
 plays another user without root. SIGINT, SIGTERM and SIGHUP during a file write remove the claim and the
 temporary file and exit `130`, `143`, `129`. A stream (`nodeFiles.state` → `"stream"`: a
 character device, a FIFO, a socket, `/dev/stdout`, `/dev/fd/N`) is written in place, with no
-claim, no rename and no `--force` needed. Code logs through `logOf(deps)` and never writes
+claim, no rename and no `--force` needed; it is opened without creating anything
+(`O_WRONLY | O_APPEND`) and written only when the descriptor is a stream (`fstat`; a descriptor
+path keeps what the shell opened), so a path switched to a link to a regular file after it was
+classified takes the way of a file and is refused without `--force`. Code logs through `logOf(deps)` and never writes
 diagnostics with `io.err` directly. `run()` builds the logger from argv before commander
 parses it (`logFormatFromArgv`, which skips the value of one of the program's own value options, as
 commander does, and is used only for the records of a parse error; a `preAction` hook
