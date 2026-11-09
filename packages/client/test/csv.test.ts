@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { MAX_CSV_CELLS, MAX_CSV_ROWS, hasTooManyDigits, headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/csv.js";
 import { BundeswahlParseError } from "../src/errors.js";
 import * as fx from "./fixtures.js";
@@ -226,4 +227,23 @@ test("parseCsvRows stops at a row and a cell budget, with headroom over the larg
   }
   // A long run of CRs inside a field is one field, not one part per CR.
   assert.deepEqual(parseCsvRows(`a${"\r".repeat(1000)}b;c\n`), [["ab", "c"]]);
+});
+
+// This test starts a process with a small heap: 30 s instead of the suite's 5 s.
+const STARTS_A_PROCESS = { timeout: 30_000 };
+
+test("a quoted field of millions of \"\" pairs is read within a small heap", STARTS_A_PROCESS, () => {
+  // Each `""` pushed one piece into the field's parts, a string and an array slot each, bounded by
+  // neither the cell nor the row budget: 5 million `x""` (15 MB) exhausted a 96 MB heap.
+  const csv = new URL("../src/csv.js", import.meta.url).href;
+  const n = 5_000_000;
+  const script =
+    `const { parseCsvRows } = await import(${JSON.stringify(csv)});` +
+    `const rows = parseCsvRows('a;"' + 'x""'.repeat(${n}) + '"\\nb;c\\n');` +
+    `process.stdout.write(rows.length + " " + rows[0][1].length + " " + /^(?:x")+$/.test(rows[0][1]) + " " + rows[1][1]);`;
+  const out = execFileSync(process.execPath, ["--max-old-space-size=96", "--input-type=module", "-e", script], { encoding: "utf8" });
+  assert.equal(out, `2 ${2 * n} true c`);
+  // The pieces still come out in order, across the batches they are joined in.
+  const mixed = Array.from({ length: 40_000 }, (_, i) => `${i}""`).join("");
+  assert.deepEqual(parseCsvRows(`"${mixed}";x`), [[mixed.replace(/""/g, '"'), "x"]]);
 });

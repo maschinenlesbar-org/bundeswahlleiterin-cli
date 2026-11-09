@@ -6,7 +6,7 @@
 // escapes, and delimiters/newlines inside quotes. That is more than these files
 // need today, but keeps the parser correct if a field ever contains a `;`.
 
-import { BundeswahlParseError, cutForMessage } from "./errors.js";
+import { BundeswahlParseError, TextBuilder, cutForMessage } from "./errors.js";
 import { sanitizeServerText } from "./engine.js";
 
 /** Strip a leading UTF-8 byte-order mark, if present. */
@@ -24,6 +24,9 @@ function stripBom(text: string): string {
 export const MAX_CSV_ROWS = 200_000;
 export const MAX_CSV_CELLS = 4_000_000;
 
+/** How many pieces of one field are kept before they are joined (see parseCsvRows). */
+const PART_BATCH = 16_384;
+
 const QUOTE = 0x22;
 const LF = 0x0a;
 const CR = 0x0d;
@@ -37,12 +40,17 @@ const CR = 0x0d;
  * the delimiter, CR, LF) and joined once, never built one character at a time: `field += ch`
  * made a rope of one piece per character, and a 20 MB cell (a hostile or broken answer under
  * the size cap) took the process past a 512 MB heap and crashed it before anything was printed.
+ * A field of many pieces (every `""` escape ends one) is joined every PART_BATCH pieces through a
+ * TextBuilder, so its memory follows its text, not its number of escapes: one piece per `""`, a
+ * string and an array slot each, exhausted a small heap on a 15 MB cell, within both budgets.
  * More than MAX_CSV_ROWS rows or MAX_CSV_CELLS cells is a BundeswahlParseError.
  */
 export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let parts: string[] = [];
+  // The field's earlier pieces, joined in batches, once it has more than PART_BATCH of them.
+  let long: TextBuilder | undefined;
   let inQuotes = false;
   const src = stripBom(text);
   // The delimiter is one character; a longer one never matched a single character before either.
@@ -50,9 +58,23 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
   // `from` is where the text not yet taken into `parts` starts.
   let from = 0;
   let cells = 0;
+  const addPart = (piece: string): void => {
+    parts.push(piece);
+    if (parts.length >= PART_BATCH) {
+      (long ??= new TextBuilder()).push(parts.join(""));
+      parts = [];
+    }
+  };
   const endField = (at: number): string => {
     parts.push(src.slice(from, at));
-    const field = parts.length === 1 ? (parts[0] as string) : parts.join("");
+    let field: string;
+    if (long === undefined) {
+      field = parts.length === 1 ? (parts[0] as string) : parts.join("");
+    } else {
+      long.push(parts.join(""));
+      field = long.toString();
+      long = undefined;
+    }
     parts = [];
     return field;
   };
@@ -74,10 +96,10 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
     if (inQuotes) {
       if (c === QUOTE) {
         if (src.charCodeAt(i + 1) === QUOTE) {
-          parts.push(src.slice(from, i + 1)); // up to and with one quote
+          addPart(src.slice(from, i + 1)); // up to and with one quote
           i++;
         } else {
-          parts.push(src.slice(from, i));
+          addPart(src.slice(from, i));
           inQuotes = false;
         }
         from = i + 1;
@@ -85,7 +107,7 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
       continue;
     }
     if (c === QUOTE) {
-      parts.push(src.slice(from, i));
+      addPart(src.slice(from, i));
       inQuotes = true;
       from = i + 1;
     } else if (c === delim) {
@@ -98,7 +120,7 @@ export function parseCsvRows(text: string, delimiter = ";"): string[][] {
       from = i + 1;
     } else if (c === CR) {
       // swallow — the following \n (or EOF) ends the row; a run of CRs adds no empty parts
-      if (i > from) parts.push(src.slice(from, i));
+      if (i > from) addPart(src.slice(from, i));
       from = i + 1;
     }
   }
