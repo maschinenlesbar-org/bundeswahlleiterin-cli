@@ -23,9 +23,10 @@ interface Run {
   stderr: string;
 }
 
-/** Serve `body` as a CSV file to one run of `bundeswahl <command>` with a heap of `heapMb`, then stop. */
-async function runWithAnswer(command: string, body: string, heapMb: number): Promise<Run> {
+/** Serve `body` as a CSV file (status `status`) to one run of `bundeswahl <command>` with a heap of `heapMb`, then stop. */
+async function runWithAnswer(command: string, body: string, heapMb: number, status = 200): Promise<Run> {
   const server = http.createServer((_req, res) => {
+    res.statusCode = status;
     res.setHeader("content-type", "text/csv; charset=utf-8");
     res.end(body);
   });
@@ -84,4 +85,11 @@ test("an answer of millions of line breaks ends in one ERROR record within a sma
   for (const command of ["parties", "results"]) {
     oneApiError(await runWithAnswer(command, body, 512), command, /Malformed CSV: more than 200000 rows/);
   }
+});
+
+test("a 16 MB error answer ends in one ERROR record within a small heap (security audit, class C)", STARTS_A_PROCESS, async () => {
+  // The snippet collapsed the whitespace of the whole body before cutting it to 200 characters:
+  // a regex replace over 8 million runs exhausted a 128 MB heap. The body is cut first now.
+  const run = await runWithAnswer("parties", "x ".repeat(8_000_000), 128, 500);
+  oneApiError(run, "16 MB error body", /HTTP 500 for GET \S+: x x x/);
 });

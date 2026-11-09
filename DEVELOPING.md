@@ -149,7 +149,9 @@ forms: `echoedCredentialForms`), and scrubs them from error bodies
 are also matched percent-encoded, and the userinfo also as WHATWG writes it in the request URL
 (`p%22%C3%A4` for a typed `p"ä`). An error body that is JSON spelling a credential with escapes
 (`\"`, `\u00e4`), which the scrub of the text as sent misses, is kept as its decoded JSON written
-again with the credential scrubbed (`scrubBody`), and the `detail` snippet is cut from that body.
+again with the credential scrubbed (`scrubBody`), and the `detail` snippet is cut from that body:
+`sanitizeServerText` of its first 16 384 characters, then 200, so a 16 MB error page costs
+neither seconds nor the heap.
 A value the client quotes from a 2xx answer into a parse error (a CSV cell, a header name, a
 charset) goes through `RequestEngine.quoteServerValue`: scrubbed first, then quoted as
 `quoteValue` does (JSON-quoted, invisible characters escaped, cut at 500 characters). `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever

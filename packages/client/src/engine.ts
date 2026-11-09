@@ -923,15 +923,14 @@ export class RequestEngine {
     // The site serves HTML error pages, not a structured envelope; include a short,
     // whitespace-collapsed snippet only when the body is plain (non-HTML) text.
     const trimmed = text.trim();
-    // `detail` is a snippet of the attacker-controlled response body that flows
-    // into the error message printed to stderr. Whitespace-collapse handles
-    // tab/newline, but ESC (0x1b) and other non-\s control bytes are not covered
-    // by `\s+`; sanitizeServerText strips them so no terminal escape sequence
-    // reaches the user's terminal.
+    // `detail` is a snippet of the attacker-controlled response body that flows into the error
+    // message printed to stderr. sanitizeServerText reads a bounded prefix of it (16 384
+    // characters), drops escape sequences and control characters and collapses whitespace, so no
+    // terminal escape sequence reaches the user's terminal; then it is cut to 200. Collapsing the
+    // whitespace of the whole body first (a regex replace over millions of runs in a 16 MB error
+    // page) exhausted a small heap.
     const detail =
-      trimmed && !/^<!doctype html|^<html/i.test(trimmed)
-        ? sanitizeServerText(cutText(trimmed.replace(/\s+/g, " "), 200))
-        : undefined;
+      trimmed && !/^<!doctype html|^<html/i.test(trimmed) ? cutText(sanitizeServerText(trimmed), 200) : undefined;
     return new BundeswahlApiError({ status, url, method: "GET", body: text, detail, retryAfterMs });
   }
 }
