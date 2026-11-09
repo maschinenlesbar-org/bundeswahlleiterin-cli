@@ -139,7 +139,14 @@ never show it) next to its userinfo, raw and percent-decoded, and the forms a se
 echoes it back in (the `Basic` value, the decoded `user:password`, the password alone
 from 4 characters, and for a userinfo without a password the user name, a token, in the same
 forms: `echoedCredentialForms`), and scrubs them from error bodies
-(`BundeswahlApiError.body`/`detail`), transport error text and the `cause` chain. `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
+(`BundeswahlApiError.body`/`detail`), transport error text and the `cause` chain. The forms
+are also matched percent-encoded, and the userinfo also as WHATWG writes it in the request URL
+(`p%22%C3%A4` for a typed `p"ä`). An error body that is JSON spelling a credential with escapes
+(`\"`, `\u00e4`), which the scrub of the text as sent misses, is kept as its decoded JSON written
+again with the credential scrubbed (`scrubBody`), and the `detail` snippet is cut from that body.
+A value the client quotes from a 2xx answer into a parse error (a CSV cell, a header name, a
+charset) goes through `RequestEngine.quoteServerValue`: scrubbed first, then quoted as
+`quoteValue` does (JSON-quoted, invisible characters escaped, cut at 500 characters). `BundeswahlApiError.url` is the request URL with its userinfo redacted. Whatever
 a custom transport throws (a string, fetch's `TypeError` naming the URL) reaches the
 caller as a `BundeswahlNetworkError` with the original, scrubbed, as its `cause`.
 `apps/cli/test/conformance-p2-library-redaction.test.ts` checks the client, nine failing

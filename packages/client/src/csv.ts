@@ -188,15 +188,21 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
   return { header, rows };
 }
 
+/** A header name or cell as a message quotes it: cleaned of terminal controls, cut. */
+function quoteCell(value: string): string {
+  return `"${cutForMessage(sanitizeServerText(value))}"`;
+}
+
 /**
  * Throw a BundeswahlParseError if a (non-empty) column name occurs twice in the
- * header. A repeated name would silently resolve to one of the two columns — in
+ * header. `quote` shows the name in the message (the client passes one that also scrubs the
+ * base URL's credentials, `RequestEngine.quoteServerValue`). A repeated name would silently resolve to one of the two columns — in
  * kerg2 a second "Anzahl"/"Prozent" pair (the VorpAnzahl/VorpProzent position)
  * reported the 2021 result as the 2025 one — or, in a key→value map, overwrite the
  * earlier value: a wrong row that still exits 0. None of the published files does
  * this, so treat it as the format having changed under us.
  */
-export function assertUniqueHeader(header: readonly string[]): void {
+export function assertUniqueHeader(header: readonly string[], quote: (value: string) => string = quoteCell): void {
   const seen = new Set<string>();
   for (const name of header) {
     if (name === "") continue; // padding cells are expected and carry no data
@@ -204,7 +210,7 @@ export function assertUniqueHeader(header: readonly string[]): void {
       throw new BundeswahlParseError(
         // The name comes from the (possibly hostile) response: sanitise it, it is
         // printed to stderr.
-        `Malformed CSV: duplicate column name "${cutForMessage(sanitizeServerText(name))}" in the header — ` +
+        `Malformed CSV: duplicate column name ${quote(name)} in the header — ` +
           "values would silently overwrite each other, so the file is not usable as a key→value map.",
       );
     }
@@ -286,7 +292,7 @@ export function parseGermanNumber(value: string): number | null {
   if (s === "" || s === "-" || s === "–") return null;
   if (!GERMAN_NUMBER.test(s)) {
     throw new BundeswahlParseError(
-      `Malformed CSV: "${cutForMessage(sanitizeServerText(s))}" is not a German-formatted number.`,
+      `Malformed CSV: ${quoteCell(s)} is not a German-formatted number.`,
     );
   }
   if (significantDigits(s) > MAX_SIGNIFICANT_DIGITS) {

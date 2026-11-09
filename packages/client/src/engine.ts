@@ -26,6 +26,7 @@ import {
   cutText,
   describeValue,
   echoedCredentialForms,
+  quoteValue,
   redactCredentials,
   redactSecrets,
   redactUrl,
@@ -378,13 +379,18 @@ function hasTransientCode(err: unknown, depth = 0): boolean {
  * and one bad byte never sinks a whole file (D2). A leading byte-order mark is dropped
  * (TextDecoder's default).
  */
-function decodeCsvBody(body: Buffer, contentType: string, request: string): { text: string; replaced: number } {
+function decodeCsvBody(
+  body: Buffer,
+  contentType: string,
+  request: string,
+  quote: (value: string) => string,
+): { text: string; replaced: number } {
   const declared = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(declared ?? "utf-8", { fatal: true });
   } catch {
-    throw new BundeswahlParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(declared ?? ""))}".`);
+    throw new BundeswahlParseError(`${request}: unsupported response charset ${quote(declared ?? "")}.`);
   }
   if (decoder.encoding !== "utf-8") {
     const nonAscii = body.some((b) => b >= 0x80);
@@ -398,7 +404,7 @@ function decodeCsvBody(body: Buffer, contentType: string, request: string): { te
     }
     if (nonAscii && utf8) {
       throw new BundeswahlParseError(
-        `${request}: the answer declares charset "${cutForMessage(sanitizeServerText(declared ?? ""))}" but is ` +
+        `${request}: the answer declares charset ${quote(declared ?? "")} but is ` +
           "UTF-8 — decoding it as declared would garble every umlaut.",
       );
     }
@@ -453,6 +459,18 @@ function countChar(text: string, code: number): number {
   let n = 0;
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === code) n++;
   return n;
+}
+
+/**
+ * `form` and its spelling in a URL (`encodeURIComponent`): a server that puts a credential into
+ * a URL percent-encodes it. A form that has no such spelling (a lone surrogate) is kept as it is.
+ */
+function urlSpellings(form: string): string[] {
+  try {
+    return [form, encodeURIComponent(form)];
+  } catch {
+    return [form];
+  }
 }
 
 /**
@@ -521,8 +539,9 @@ export class RequestEngine {
   readonly #credentials: string[];
   /**
    * The forms a server echoes that userinfo back in (the Basic value, the decoded
-   * `user:password`, the password alone), longest first, so a password never leaves half
-   * of the `user:password` around it.
+   * `user:password`, the password or token alone; `echoedCredentialForms`), each also
+   * percent-encoded as in a URL, longest first, so a password never leaves half of the
+   * `user:password` around it.
    */
   readonly #echoed: string[];
   private readonly transport: Transport;
@@ -541,16 +560,17 @@ export class RequestEngine {
     assertValid("options", options, knownKeysProblem(ENGINE_OPTION_KEYS));
     // Validate the raw value, before any slash strip, so "https://h/ " is caught too.
     this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
-    this.#credentials = credentialsIn(this.#baseUrl).flatMap((raw) => {
+    // The userinfo as typed and as sent (WHATWG percent-encodes some of its characters, and a
+    // server that echoes the request URL echoes that spelling).
+    const userinfos = [...new Set([...credentialsIn(this.#baseUrl), ...credentialsIn(new URL(this.#baseUrl).href)])];
+    this.#credentials = userinfos.flatMap((raw) => {
       try {
         return [raw, decodeURIComponent(raw)];
       } catch {
         return [raw];
       }
     });
-    this.#echoed = credentialsIn(this.#baseUrl)
-      .flatMap(echoedCredentialForms)
-      .sort((a, b) => b.length - a.length);
+    this.#echoed = [...new Set(userinfos.flatMap(echoedCredentialForms).flatMap(urlSpellings))].sort((a, b) => b.length - a.length);
     this.transport = functionOption("transport", options.transport, nodeHttpTransport);
     this.userAgent =
       options.userAgent === undefined ? DEFAULT_USER_AGENT : assertHeaderValue("userAgent", options.userAgent);
@@ -612,6 +632,43 @@ export class RequestEngine {
    */
   private scrub(text: string): string {
     return this.#credentials.length === 0 ? text : redactSecrets(redactCredentials(text, this.#credentials), this.#echoed);
+  }
+
+  /**
+   * An error body, already scrubbed as sent, as `BundeswahlApiError.body` keeps it (and its
+   * `detail` quotes it): when it is JSON with an escape in it, checked decoded too. An escape
+   * (`\"`, `\u00e4`) hides an echoed credential from the scrub of the text as sent, while a caller
+   * who parses the body, or reads the snippet, sees it. Such a body is kept as the decoded JSON
+   * written again (`JSON.stringify`, one spelling per character) with the credential scrubbed in
+   * that spelling. A body that doesn't parse is text nobody decodes, and stays as sent; one too
+   * deeply nested to write again is left out.
+   */
+  private scrubBody(scrubbed: string): string {
+    if (this.#echoed.length === 0 || !scrubbed.includes("\\")) return scrubbed;
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(scrubbed);
+    } catch {
+      return scrubbed;
+    }
+    let rewritten: string;
+    try {
+      rewritten = JSON.stringify(decoded);
+    } catch {
+      return "";
+    }
+    const spelled = this.#echoed.map((form) => JSON.stringify(form).slice(1, -1));
+    return spelled.some((form) => rewritten.includes(form)) ? redactSecrets(rewritten, spelled) : scrubbed;
+  }
+
+  /**
+   * A value from an answer quoted for an error message (`quoteValue`: JSON-quoted, invisible
+   * characters escaped, cut at 500 characters), the base URL's credentials scrubbed first, before
+   * the cut: a 2xx answer (a CSV cell or header name the client refuses) can echo them as well as
+   * an error body. The client quotes every server value with this.
+   */
+  quoteServerValue(value: string): string {
+    return quoteValue(this.scrub(value));
   }
 
   /**
@@ -807,7 +864,7 @@ export class RequestEngine {
     const gzipMagic = res.data.length >= 2 && res.data[0] === 0x1f && res.data[1] === 0x8b;
     if ((encoding !== "" && encoding !== "identity") || gzipMagic) {
       const what = encoding !== "" && encoding !== "identity"
-        ? `Content-Encoding: ${cutForMessage(sanitizeServerText(encoding))}`
+        ? `Content-Encoding: ${cutForMessage(sanitizeServerText(this.scrub(encoding)))}`
         : "gzip data without a Content-Encoding";
       throw new BundeswahlParseError(
         `${request}: the answer is compressed (${what}) although the client asked for no ` +
@@ -825,7 +882,7 @@ export class RequestEngine {
     };
     let decoded: { text: string; replaced: number };
     try {
-      decoded = decodeCsvBody(res.data, res.contentType, request);
+      decoded = decodeCsvBody(res.data, res.contentType, request, (value) => this.quoteServerValue(value));
     } catch (err) {
       // Only the head is read: the whole of a body too large to decode is too large here too.
       if (looksLikeHtml(res.data.subarray(0, HTML_SNIFF_BYTES).toString("latin1"))) throw htmlPage();
@@ -855,7 +912,9 @@ export class RequestEngine {
     } catch (err) {
       if (!isStringTooLong(err)) throw err;
     }
-    const text = this.scrub(raw);
+    // A JSON body that spells a credential with escapes is written again decoded, scrubbed
+    // (scrubBody), so neither `body` nor the snippet below carries it in any spelling.
+    const text = this.scrubBody(this.scrub(raw));
     // The site serves HTML error pages, not a structured envelope; include a short,
     // whitespace-collapsed snippet only when the body is plain (non-HTML) text.
     const trimmed = text.trim();

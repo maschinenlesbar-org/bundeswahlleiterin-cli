@@ -345,13 +345,13 @@ test("a file cut at a row boundary, or with no data rows, is a parse error in ev
   const kerg2Header = lines(fx.kerg2Csv)[5]!;
   const cases: Array<[string, string, (c: BundeswahlClient) => Promise<unknown>, RegExp]> = [
     ["kerg2 header only", headerOnly(fx.kerg2Csv, kerg2Header), (c) => c.results(), /: Malformed CSV: a header but no data rows/],
-    ["kerg2 cut inside an area", withoutLast(fx.kerg2Csv), (c) => c.results({ area: "Kiel" }), /the file is incomplete — its last row \(Kiel, GRÜNE\) is not an area's closing "Übrige" row/],
+    ["kerg2 cut inside an area", withoutLast(fx.kerg2Csv), (c) => c.results({ area: "Kiel" }), /the file is incomplete — its last row \("Kiel, GRÜNE"\) is not an area's closing "Übrige" row/],
     [
       "kerg2 cut at an area boundary",
       fx.kerg2Csv.split("\n").filter((l) => !l.includes(";Kiel;")).join("\n") +
         "BT;23.02.2025;Land;01;Schleswig-Holstein;BUND;99;System-Gruppe;Übrige;1000;2;;;;;;;;\n",
       (c) => c.results({ areaType: "Bund" }),
-      /the Wahlkreise of Schleswig-Holstein don't add up to the Land's Wahlberechtigte/,
+      /the Wahlkreise of "Schleswig-Holstein" don't add up to the Land's Wahlberechtigte/,
     ],
     [
       "kerg2 with a Land missing",
@@ -431,4 +431,30 @@ test("a results file with more Länder or Wahlkreise than the election has is re
   ]);
   const ok = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(full)).transport });
   assert.equal((await ok.results({ areaType: "Land" })).length, 16);
+});
+
+test("a cell or header name the client quotes in a parse error is scrubbed of the base URL's credentials (security audit, D)", async () => {
+  const pw = "pä's-W0rd";
+  const base = `https://alice:${encodeURIComponent(pw)}@mirror.example`;
+  const basic = Buffer.from(`alice:${pw}`, "utf8").toString("base64");
+  const kerg = fx.kerg2Csv;
+  for (const echo of [pw, `alice:${pw}`, basic, `https://alice:${encodeURIComponent(pw)}@mirror.example/x`]) {
+    const cases: Array<[string, string, (c: BundeswahlClient) => Promise<unknown>]> = [
+      ["number cell", kerg.replace("36690", `36x${echo}`), (c) => c.results()],
+      ["Stimme", kerg.replace(";SPD;1;1;", `;SPD;1;${echo};`), (c) => c.results()],
+      ["Gebietsart", kerg.replace(";Wahlkreis;005;Kiel;LAND;01;Partei;SPD", `;${echo};005;Kiel;LAND;01;Partei;SPD`), (c) => c.results()],
+      ["duplicate column", fx.partiesCsv.replace("GruppennameKurz;Gruppenname", `${echo};${echo}`).replace("Gruppenschluessel;", `${echo}x;`), (c) => c.parties()],
+    ];
+    for (const [label, csv, call] of cases) {
+      const client = new BundeswahlClient({ baseUrl: base, transport: async () => csvResponse(csv) });
+      const err = await call(client).then(
+        () => assert.fail(`${label}: resolved`),
+        (caught: unknown) => caught,
+      );
+      assert.ok(err instanceof BundeswahlParseError, `${label}: ${String(err)}`);
+      for (const secret of [pw, basic, encodeURIComponent(pw), JSON.stringify(pw).slice(1, -1)]) {
+        assert.ok(!err.message.includes(secret), `${label} ${echo}: ${err.message}`);
+      }
+    }
+  }
 });

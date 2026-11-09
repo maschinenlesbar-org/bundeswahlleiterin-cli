@@ -8,7 +8,7 @@
 //   await c.parties();
 //   await c.wahlkreise({ land: "Bayern" });
 
-import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
+import { RequestEngine, type EngineOptions } from "./engine.js";
 import {
   assertUniqueHeader,
   hasTooManyDigits,
@@ -18,7 +18,7 @@ import {
   TOO_MANY_DIGITS,
   type ParsedCsv,
 } from "./csv.js";
-import { BundeswahlParseError, BundeswahlValidationError, cutForMessage, describeValue } from "./errors.js";
+import { BundeswahlParseError, BundeswahlValidationError, describeValue } from "./errors.js";
 import { assertValid, knownKeysProblem, textProblem } from "./validate.js";
 import type {
   AreaType,
@@ -161,7 +161,7 @@ function assertHasRows(parsed: ParsedCsv, request: string): void {
  *   a cut at an area boundary, which drops whole Länder or Wahlkreise, is caught too, and
  *   so is a duplicated area.
  */
-function assertCompleteResults(rows: readonly ResultRow[], request: string): void {
+function assertCompleteResults(rows: readonly ResultRow[], request: string, quote: (value: string) => string): void {
   if (rows.length === 0) {
     throw new BundeswahlParseError(
       `${request}: Malformed CSV: a header but no data rows — the file is truncated or a placeholder.`,
@@ -172,7 +172,7 @@ function assertCompleteResults(rows: readonly ResultRow[], request: string): voi
   const last = rows[rows.length - 1]!;
   if (!(last.gruppenart === "System-Gruppe" && last.gruppenname === "Übrige" && last.stimme === 2)) {
     throw truncated(
-      `its last row (${cutForMessage(sanitizeServerText(`${last.gebietsname}, ${last.gruppenname}`))}) is not an ` +
+      `its last row (${quote(`${last.gebietsname}, ${last.gruppenname}`)}) is not an ` +
         'area\'s closing "Übrige" row for the Zweitstimme',
     );
   }
@@ -208,7 +208,7 @@ function assertCompleteResults(rows: readonly ResultRow[], request: string): voi
   }
   for (const land of laender) {
     if ((kreisSums.get(numberKey(land.gebietsnummer)) ?? 0) !== (land.anzahl ?? 0)) {
-      throw truncated(`the Wahlkreise of ${cutForMessage(sanitizeServerText(land.gebietsname))} don't add up to the Land's Wahlberechtigte`);
+      throw truncated(`the Wahlkreise of ${quote(land.gebietsname)} don't add up to the Land's Wahlberechtigte`);
     }
   }
 }
@@ -284,7 +284,7 @@ function namingRequest<T>(request: string, fn: () => T): T {
  * So: the header row must be found, and every column in `columns` (all the ones
  * the mapper reads) must be in it.
  */
-function parseDataset(text: string, request: string, columns: readonly string[]): ParsedCsv {
+function parseDataset(text: string, request: string, columns: readonly string[], quote: (value: string) => string): ParsedCsv {
   // The header is found by its column names, wherever they stand: finding it by its first
   // cell broke on a reorder that moved the first column, which the by-name mapping
   // below is meant to survive.
@@ -298,7 +298,7 @@ function parseDataset(text: string, request: string, columns: readonly string[])
   }
   // Columns are looked up by name, so a repeated name would silently pick one of
   // the two (the last) — refuse it for every dataset, not only `structure`.
-  namingRequest(request, () => assertUniqueHeader(parsed.header));
+  namingRequest(request, () => assertUniqueHeader(parsed.header, quote));
   const missing = columns.filter((c) => !parsed.header.includes(c));
   if (missing.length > 0) {
     throw new BundeswahlParseError(
@@ -328,6 +328,13 @@ export class BundeswahlClient {
   constructor(options: BundeswahlClientOptions = {}) {
     this.engine = new RequestEngine(options);
   }
+
+  /**
+   * A value from an answer (a CSV cell, a header name) quoted for an error message, the base
+   * URL's credentials scrubbed first (`RequestEngine.quoteServerValue`): a file from a mirror can
+   * echo them as well as an error body.
+   */
+  private readonly quote = (value: string): string => this.engine.quoteServerValue(value);
 
   /**
    * The Bundestagswahl 2025 results (kerg2), one row per area × group × ballot.
@@ -361,7 +368,7 @@ export class BundeswahlClient {
 
     const text = await this.engine.getText(BTW2025.results);
     const request = `GET ${this.engine.describeUrl(BTW2025.results)}`;
-    const parsed = parseDataset(text, request, RESULT_COLUMNS);
+    const parsed = parseDataset(text, request, RESULT_COLUMNS, this.quote);
     const at = indexMap(parsed.header);
     assertUnambiguousNumbers(parsed, at, RESULT_NUMBER_COLUMNS, request);
     // A malformed number or ballot is a parse error naming the cell, never a
@@ -375,7 +382,7 @@ export class BundeswahlClient {
         throw new BundeswahlParseError(
           `${request}: Malformed CSV: column "${column}" in data row ${row} ` +
             `${hasTooManyDigits(raw) ? TOO_MANY_DIGITS : "is not a number"}: ` +
-            `"${cutForMessage(sanitizeServerText(raw))}".`,
+            `${this.engine.quoteServerValue(raw)}.`,
         );
       }
     };
@@ -384,7 +391,7 @@ export class BundeswahlClient {
       if (stimmeRaw !== "" && stimmeRaw !== "1" && stimmeRaw !== "2") {
         throw new BundeswahlParseError(
           `${request}: Malformed CSV: column "Stimme" in data row ${i + 1} must be 1, 2 or empty, ` +
-            `got "${cutForMessage(sanitizeServerText(stimmeRaw))}".`,
+            `got ${this.engine.quoteServerValue(stimmeRaw)}.`,
         );
       }
       // The area level is the key of the --area-type filter and typed AreaType: a value
@@ -396,7 +403,7 @@ export class BundeswahlClient {
       if (gebietsart === undefined) {
         throw new BundeswahlParseError(
           `${request}: Malformed CSV: column "Gebietsart" in data row ${i + 1} must be ` +
-            `${AREA_TYPES.join(", ")}, got "${cutForMessage(sanitizeServerText(gebietsartRaw))}".`,
+            `${AREA_TYPES.join(", ")}, got ${this.engine.quoteServerValue(gebietsartRaw)}.`,
         );
       }
       return {
@@ -422,7 +429,7 @@ export class BundeswahlClient {
       };
     });
 
-    assertCompleteResults(rows, request);
+    assertCompleteResults(rows, request, this.quote);
 
     if (areaType !== undefined) rows = rows.filter((r) => r.gebietsart === areaType);
     if (area !== undefined) {
@@ -443,7 +450,7 @@ export class BundeswahlClient {
   async parties(): Promise<Party[]> {
     const text = await this.engine.getText(BTW2025.parties);
     const request = `GET ${this.engine.describeUrl(BTW2025.parties)}`;
-    const parsed = parseDataset(text, request, PARTY_COLUMNS);
+    const parsed = parseDataset(text, request, PARTY_COLUMNS, this.quote);
     assertHasRows(parsed, request);
     const at = indexMap(parsed.header);
     const parties = parsed.rows.map<Party>((r) => ({
@@ -470,7 +477,7 @@ export class BundeswahlClient {
     const land = textFilter("land", opts.land);
     const text = await this.engine.getText(BTW2025.wahlkreise);
     const request = `GET ${this.engine.describeUrl(BTW2025.wahlkreise)}`;
-    const parsed = parseDataset(text, request, WAHLKREIS_COLUMNS);
+    const parsed = parseDataset(text, request, WAHLKREIS_COLUMNS, this.quote);
     const at = indexMap(parsed.header);
     let rows = parsed.rows.map<Wahlkreis>((r) => ({
       nr: cell(r, at("WKR_NR")),
@@ -539,7 +546,7 @@ export class BundeswahlClient {
     }
     const text = await this.engine.getText(BTW2025.structure);
     const request = `GET ${this.engine.describeUrl(BTW2025.structure)}`;
-    const parsed = parseDataset(text, request, STRUCTURE_COLUMNS);
+    const parsed = parseDataset(text, request, STRUCTURE_COLUMNS, this.quote);
     assertHasRows(parsed, request);
     // Cells are trimmed, as every other dataset's mapper does: the upstream file has one
     // Wahlkreis name with a trailing space (16, "…Vorpommern-Greifswald II "), so a join

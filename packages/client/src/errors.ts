@@ -303,6 +303,11 @@ export class BundeswahlApiError extends BundeswahlError {
   readonly detail: string | undefined;
   readonly url: string;
   readonly method: string;
+  /**
+   * The body as the server sent it, the base URL's credentials scrubbed. A JSON body that spells
+   * one with escapes (`\"`, `\u00e4`) is kept as its decoded JSON written again, scrubbed; a body
+   * too large to be a string, or too deeply nested to write again, is left out ("").
+   */
   readonly body: string;
   /**
    * For a 429/503 that was not retried because its `Retry-After` asked for longer than the

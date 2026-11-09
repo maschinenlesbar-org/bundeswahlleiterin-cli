@@ -664,3 +664,56 @@ test("a TextBuilder joins its pieces in order across batches", () => {
   assert.equal(b.toString(), expected.join(""));
   assert.equal(new TextBuilder().toString(), "");
 });
+
+test("an error body keeps its spelling unless a credential hides behind an escape (security audit, D)", async () => {
+  const base = "https://alice:s3cret-pw@mirror.example";
+  const errorOf = async (body: string): Promise<BundeswahlApiError> => {
+    const e = new RequestEngine({ baseUrl: base, transport: async () => rawResponse(body, "application/json", 500), maxRetries: 0 });
+    const err = await e.getText("/x").catch((caught: unknown) => caught);
+    assert.ok(err instanceof BundeswahlApiError, String(err));
+    return err;
+  };
+  // No credential, or one spelled as sent: the body as sent (scrubbed), escapes kept.
+  assert.equal((await errorOf('{"m":"caf\\u00e9 \\"x\\""}')).body, '{"m":"caf\\u00e9 \\"x\\""}');
+  assert.equal((await errorOf('{"m":"pw s3cret-pw \\u00e9"}')).body, '{"m":"pw *** \\u00e9"}');
+  // Escaped: written again decoded, scrubbed in that spelling; the snippet quotes that body.
+  const escaped = await errorOf('{"m":"pw s3cret\\u002dpw \\u00e9"}');
+  assert.equal(escaped.body, '{"m":"pw *** é"}');
+  assert.ok(!escaped.message.includes("s3cret") && escaped.detail === '{"m":"pw *** é"}', escaped.message);
+  // A JSON string whose every character is escaped, and a `\"` inside a user:password.
+  const pw = 'pä"s-W0rd';
+  const typed = new RequestEngine({
+    baseUrl: `https://alice:${encodeURIComponent(pw)}@mirror.example`,
+    maxRetries: 0,
+    transport: async () => rawResponse(JSON.stringify(`bad login alice:${pw}`), "text/plain", 401),
+  });
+  const login = await typed.getText("/x").catch((caught: unknown) => caught);
+  assert.ok(login instanceof BundeswahlApiError);
+  for (const text of [login.message, login.detail ?? "", login.body]) assert.ok(!text.includes('s-W0rd'), text);
+  // Not JSON: nobody decodes it, it stays as sent.
+  assert.equal((await errorOf("pw s3cret\\u002dpw")).body, "pw s3cret\\u002dpw");
+});
+
+test("a value quoted from an answer is scrubbed before it is cut, so no part of a credential stays (security audit, D)", () => {
+  const pw = "s3cret-Pw-long";
+  const e = new RequestEngine({ baseUrl: `https://alice:${pw}@mirror.example` });
+  for (const at of [0, 490, 495, 499]) {
+    const quoted = e.quoteServerValue(`${"x".repeat(at)}${pw}${"y".repeat(600)}`);
+    assert.ok(!quoted.includes("s3cret"), `${at}: ${quoted}`);
+  }
+  assert.equal(new RequestEngine().quoteServerValue('a"b'), '"a\\"b"');
+});
+
+test("an echo of the request URL as sent is scrubbed, a short password too (security audit, D)", async () => {
+  // Typed raw; WHATWG writes `p%22%C3%A4` in the URL, which a server echoes.
+  const e = new RequestEngine({
+    baseUrl: 'https://alice:p"ä@mirror.example',
+    maxRetries: 0,
+    transport: async () => rawResponse("no access: https://alice:p%22%C3%A4@mirror.example/x", "text/plain", 403),
+  });
+  const err = await e.getText("/x").catch((caught: unknown) => caught);
+  assert.ok(err instanceof BundeswahlApiError, String(err));
+  for (const text of [err.message, err.detail ?? "", err.body]) {
+    assert.ok(!text.includes("p%22%C3%A4@") && !text.includes('p"ä@'), text);
+  }
+});
