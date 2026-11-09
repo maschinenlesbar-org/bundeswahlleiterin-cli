@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_CSV_CELLS, MAX_CSV_ROWS, headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/csv.js";
+import { MAX_CSV_CELLS, MAX_CSV_ROWS, hasTooManyDigits, headerMatchThreshold, parseCsv, parseCsvRows, rowsToObjects, parseGermanNumber } from "../src/csv.js";
 import { BundeswahlParseError } from "../src/errors.js";
 import * as fx from "./fixtures.js";
 
@@ -135,6 +135,25 @@ test("parseGermanNumber refuses a number with more digits than a JS number holds
   assert.equal(parseGermanNumber("0,123456789012345"), 0.123456789012345);
   assert.equal(parseGermanNumber("000000000000000000012"), 12);
   assert.equal(parseGermanNumber("12,500000000000000000000"), 12.5);
+});
+
+test("a number with a long run of zeros is counted in linear time (security audit, class A)", () => {
+  // `fraction.replace(/0+$/, "")` tried a match at every zero of a run that doesn't end the
+  // fraction and scanned to its end each time: 100 000 zeros took seconds per cell.
+  const zeros = "0".repeat(100_000);
+  for (const cell of [`1,${zeros}1`, `${zeros}1,${zeros}1`, `-1.000,${zeros}1`]) {
+    const start = performance.now();
+    assert.equal(hasTooManyDigits(cell), true);
+    assert.throws(() => parseGermanNumber(cell), (e: unknown) => e instanceof BundeswahlParseError && e.message.length < 700);
+    const ms = performance.now() - start;
+    assert.ok(ms < 1000, `${Math.round(ms)} ms on ${cell.slice(0, 12)}…`);
+  }
+  // The trailing zeros of the fraction still don't count, the leading zeros of the integer neither.
+  assert.equal(parseGermanNumber(`${zeros}12,5${zeros}`), 12.5);
+  assert.equal(parseGermanNumber("0,0"), 0);
+  assert.equal(parseGermanNumber("100,000"), 100);
+  assert.equal(hasTooManyDigits(`1,${"0".repeat(13)}1`), false);
+  assert.equal(hasTooManyDigits(`1,${"0".repeat(14)}1`), true);
 });
 
 test("rowsToObjects rejects a duplicate column name instead of overwriting it", () => {

@@ -251,11 +251,17 @@ export const TOO_MANY_DIGITS = `has more than ${MAX_SIGNIFICANT_DIGITS} signific
  * The digits of a well-formed German number that count against MAX_SIGNIFICANT_DIGITS:
  * all of them but the integer part's leading zeros and the fraction's trailing zeros.
  * The fraction's leading zeros count (`0,0001` has four), so a tiny value can't
- * underflow to 0 either.
+ * underflow to 0 either. The zeros are counted with index loops: `fraction.replace(/0+$/, "")`
+ * tried a match at every zero of a run that doesn't end the fraction and scanned to its end each
+ * time, quadratic (a cell of 100 000 inner zeros took about 30 s).
  */
 function significantDigits(s: string): number {
   const [integer = "", fraction = ""] = s.replace(/[-.]/g, "").split(",");
-  return integer.replace(/^0+/, "").length + fraction.replace(/0+$/, "").length;
+  let lead = 0;
+  while (lead < integer.length && integer.charCodeAt(lead) === 0x30) lead++;
+  let end = fraction.length;
+  while (end > 0 && fraction.charCodeAt(end - 1) === 0x30) end--;
+  return integer.length - lead + end;
 }
 
 /** True for a well-formed German number with more than MAX_SIGNIFICANT_DIGITS digits. */
