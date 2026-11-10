@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TextDecoder, inspect } from "node:util";
 import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RequestEngine, assertHeaderValue, parseRetryAfter, sanitizeServerText, validateBaseUrl } from "../src/engine.js";
-import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, TextBuilder, credentialsIn, cutForMessage, cutText, echoedCredentialForms, redactUrl, redactUrlUserinfo, toWellFormed } from "../src/errors.js";
+import { BundeswahlApiError, BundeswahlNetworkError, BundeswahlValidationError, BundeswahlParseError, TextBuilder, credentialsIn, cutForMessage, cutText, echoedCredentialForms, redactUrl, redactUrlUserinfo, toWellFormed, typedUrlCredentials } from "../src/errors.js";
 import { makeMockTransport, csvResponse, rawResponse } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -780,4 +780,26 @@ test("credentialsIn skips the slashes and backslashes WHATWG skips after a speci
   assert.deepEqual(credentialsIn("foo:u:p@h.example"), []);
   assert.deepEqual(credentialsIn("foo:///u:p@h.example"), []);
   assert.equal(new URL("foo:///u:p@h.example").password, "");
+});
+
+test("typedUrlCredentials reads a value meant as a URL whatever its scheme: missing, special without //, mistyped (F7)", () => {
+  for (const [value, userinfo] of [
+    ["https://alice:pw@h.example/x", "alice:pw"],
+    ["http:///alice:pw@h.example", "alice:pw"],
+    ["alice:pw@h.example/x", "alice:pw"],
+    ["my_user:pw@h.example", "my_user:pw"],
+    ["T0ken:@h.example", "T0ken:"],
+    ["http//alice:pw@h.example", "alice:pw"],
+    ["https//alice:pw@h.example/v1", "alice:pw"],
+    ["http/alice:pw@h.example", "alice:pw"],
+    ["htp:/alice:pw@h.example", "alice:pw"],
+    ["http\\\\alice:pw@h.example", "alice:pw"],
+    ["http//alice:p/w@h.example", "alice:p/w"],
+  ] as const) {
+    assert.deepEqual(typedUrlCredentials(value), [userinfo], value);
+  }
+  // No "@" after the slashes, or a scheme spelled with "//" and no userinfo: none.
+  for (const value of ["", "h.example/x", "http//h.example/x", "@h.example/x", "http//@h.example", "https://h.example/a@b"]) {
+    assert.deepEqual(typedUrlCredentials(value), [], value);
+  }
 });

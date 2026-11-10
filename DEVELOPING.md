@@ -130,6 +130,11 @@ password with DEL, C1 or bidi characters is matched in its raw form.
 `apps/cli/test/conformance-p1-cli-redaction.test.ts` checks ten passwords in seven URL shapes at
 nine argv positions (the schemeless shape as the `--base-url` value only).
 
+A base URL (`--base-url`, and the environment variable where the CLI reads one) is read as
+a URL however its scheme is typed (`typedUrlCredentials`): missing (`alice:pw@host`) or
+mistyped (`http//alice:pw@host`, the colon left out, whose userinfo is everything between the
+first slashes and the last `@`), so commander's echo of a refused one shows no password.
+
 A plain-`http:` base URL gets a warning, not a refusal. `cleartextProblem(baseUrl,
 secrets)` (engine, exported) returns one sentence naming the host (`url.host`, never the
 userinfo) and what travels unencrypted — the base URL's credentials when it carries
