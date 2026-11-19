@@ -130,27 +130,37 @@ jobs:
       - name: Publish to npm (Trusted Publishing, provenance)
         run: |
           ours="sha512-$(openssl dgst -sha512 -binary "$TARBALL" | base64 -w 0)"
-          theirs="$(npm view "$PACKAGE@$VERSION" dist.integrity 2>/dev/null || true)"
-          if [ -n "$theirs" ]; then
-            if [ "$theirs" = "$ours" ]; then
-              echo "::notice::$PACKAGE@$VERSION is already on npm with these bytes; nothing to do."
-              exit 0
-            fi
+          # 0: the version is on npm with these files; 1: with other files; 2: not (yet) visible.
+          on_npm() {
+            theirs="$(npm view "$PACKAGE@$VERSION" dist.integrity 2>/dev/null || true)"
+            [ -z "$theirs" ] && return 2
+            [ "$theirs" = "$ours" ] && return 0
             # A version published outside this workflow (a package's first one) may hold the same
             # files in an archive npm made anew: compare the files before calling it a conflict.
             published="$RUNNER_TEMP/published"
-            mkdir -p "$published/npm" "$published/release"
+            rm -rf "$published" && mkdir -p "$published/npm" "$published/release"
             curl -sSfL -o "$published/npm.tgz" "$(npm view "$PACKAGE@$VERSION" dist.tarball)"
             tar -xzf "$published/npm.tgz" -C "$published/npm"
             tar -xzf "$TARBALL" -C "$published/release"
-            if diff -r "$published/npm" "$published/release" > /dev/null; then
-              echo "::notice::$PACKAGE@$VERSION is already on npm with the same files (in another archive); nothing to do."
-              exit 0
-            fi
+            diff -r "$published/npm" "$published/release" > /dev/null && return 0
             echo "::error::$PACKAGE@$VERSION is on npm with other files ($theirs)."
-            exit 1
-          fi
-          npm publish "$TARBALL" --provenance --access public
+            return 1
+          }
+          state=0; on_npm || state=$?
+          [ "$state" -eq 0 ] && { echo "::notice::$PACKAGE@$VERSION is already on npm with these files; nothing to do."; exit 0; }
+          [ "$state" -eq 1 ] && exit 1
+          if npm publish "$TARBALL" --provenance --access public; then exit 0; fi
+          # The registry's answers lag a publish by minutes: a version published by hand just
+          # before this run (a package's first one) can be invisible to npm view above and then
+          # refuse this publish. Look again for two minutes before calling it a failure.
+          for _ in 1 2 3 4 5 6; do
+            sleep 20
+            state=0; on_npm || state=$?
+            [ "$state" -eq 0 ] && { echo "::notice::$PACKAGE@$VERSION appeared on npm with these files; nothing to do."; exit 0; }
+            [ "$state" -eq 1 ] && exit 1
+          done
+          echo "::error::npm publish of $PACKAGE@$VERSION failed, and the version isn't on npm."
+          exit 1
 
   images:
     name: Push the images to the GitHub Container Registry
