@@ -76,3 +76,85 @@ export const structureCsv =
 
 /** A minimal HTML error page (what the site returns for an unknown path). */
 export const htmlShell = "<!doctype html>\n<html><head><title>404</title></head><body>Not found</body></html>";
+
+/** A Wahlkreis of a generated election: its Land, eligible voters, voters and the parties' votes. */
+export interface GenWahlkreis {
+  nr: string;
+  name: string;
+  land: { nr: string; name: string };
+  eligible: number;
+  voters: number;
+  invalid?: number;
+  /** Per party: first votes, second votes (null: no candidate or list here), the 2021 share. */
+  parties: { name: string; first: number | null; second: number | null; previous?: number }[];
+  /** The party whose candidate was elected, or "–" (none), as the file's Gewählt column. */
+  elected: string;
+}
+
+/**
+ * A complete kerg2 results file for `kreise`: the Bund, each Land and each Wahlkreis with its
+ * Wahlberechtigte, Wählende, Gültige and Ungültige rows and the parties' rows, Länder and Bund
+ * summed from their Wahlkreise (the client checks the sums), the closing Übrige row last.
+ */
+export function election(kreise: readonly GenWahlkreis[]): string {
+  const de = (n: number): string => String(Math.round(n * 1e6) / 1e6).replace(".", ",");
+  const lines: string[] = [];
+  const area = (type: string, nr: string, name: string, parentType: string, parentNr: string, ks: readonly GenWahlkreis[], elected: string): void => {
+    const sum = (f: (k: GenWahlkreis) => number): number => ks.reduce((n, k) => n + f(k), 0);
+    const row = (group: string, gname: string, order: string, stimme: string, anzahl: number | null, prozent: number | null, prev?: number): void => {
+      const diff = prozent !== null && prev !== undefined ? de(prozent - prev) : "";
+      lines.push(`BT;23.02.2025;${type};${nr};${name};${parentType};${parentNr};${group};${gname};${order};${stimme};${anzahl ?? ""};${prozent === null ? "" : de(prozent)};;${prev === undefined ? "" : de(prev)};;${diff};;${elected}`);
+    };
+    const eligible = sum((k) => k.eligible);
+    const voters = sum((k) => k.voters);
+    const invalid = sum((k) => k.invalid ?? 0);
+    row("System-Gruppe", "Wahlberechtigte", "-4", "", eligible, null);
+    row("System-Gruppe", "Wählende", "-3", "", voters, null);
+    const names = [...new Set(ks.flatMap((k) => k.parties.map((p) => p.name)))];
+    for (const stimme of [1, 2] as const) {
+      const valid = voters - invalid;
+      row("System-Gruppe", "Ungültige", "-2", String(stimme), invalid, null);
+      row("System-Gruppe", "Gültige", "-1", String(stimme), valid, null);
+      names.forEach((party, i) => {
+        const votes = ks.map((k) => k.parties.find((p) => p.name === party)?.[stimme === 1 ? "first" : "second"] ?? null);
+        const total = votes.every((v) => v === null) ? null : votes.reduce<number>((n, v) => n + (v ?? 0), 0);
+        const prev = ks[0]?.parties.find((p) => p.name === party)?.previous;
+        row("Partei", party, String(i + 1), String(stimme), total, total === null || valid === 0 ? null : (total / valid) * 100, stimme === 2 ? prev : undefined);
+      });
+    }
+  };
+  area("Bund", "99", "Bundesgebiet", "", "", kreise, "");
+  const laender = [...new Map(kreise.map((k) => [k.land.nr, k.land])).values()];
+  for (const land of laender) {
+    const ks = kreise.filter((k) => k.land.nr === land.nr);
+    area("Land", land.nr, land.name, "BUND", "99", ks, "");
+    for (const k of ks) area("Wahlkreis", k.nr, k.name, "LAND", land.nr, [k], k.elected);
+  }
+  const last = kreise[kreise.length - 1] as GenWahlkreis;
+  lines.push(`BT;23.02.2025;Wahlkreis;${last.nr};${last.name};LAND;${last.land.nr};System-Gruppe;Übrige;1000;2;;;;;;;;${last.elected}`);
+  return (
+    "﻿(c) Die Bundeswahlleiterin, Wiesbaden 2025;;;;;;;;;;;;;;;;;;\n;;;;;;;;;;;;;;;;;;\n" +
+    "Wahlart;Wahltag;Gebietsart;Gebietsnummer;Gebietsname;UegGebietsart;UegGebietsnummer;Gruppenart;Gruppenname;Gruppenreihenfolge;Stimme;Anzahl;Prozent;VorpAnzahl;VorpProzent;DiffProzent;DiffProzentPkt;Bemerkung;Gewählt\n" +
+    lines.join("\n") +
+    "\n"
+  );
+}
+
+/** A small election: Kiel and Flensburg (Schleswig-Holstein), München-Nord (Bayern). */
+export const smallElection = election([
+  {
+    nr: "001", name: "Flensburg – Schleswig", land: { nr: "01", name: "Schleswig-Holstein" }, eligible: 200, voters: 160, invalid: 2,
+    parties: [{ name: "CDU", first: 70, second: 50, previous: 25 }, { name: "SPD", first: 60, second: 40, previous: 30 }, { name: "GRÜNE", first: 28, second: 68, previous: 20 }],
+    elected: "–",
+  },
+  {
+    nr: "005", name: "Kiel", land: { nr: "01", name: "Schleswig-Holstein" }, eligible: 100, voters: 80,
+    parties: [{ name: "CDU", first: 20, second: 25 }, { name: "SPD", first: 25, second: 20 }, { name: "GRÜNE", first: 35, second: 35 }],
+    elected: "GRÜNE",
+  },
+  {
+    nr: "212", name: "München-Nord", land: { nr: "09", name: "Bayern" }, eligible: 300, voters: 240,
+    parties: [{ name: "CSU", first: 100, second: 90 }, { name: "SPD", first: 40, second: 50 }, { name: "GRÜNE", first: 100, second: 100 }, { name: "BSW", first: null, second: 0 }],
+    elected: "CSU",
+  },
+]);
