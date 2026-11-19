@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Bin shim: parse argv, run the CLI, and set the process exit code.
 
-import { handleOutputErrors } from "./io.js";
+import { exitOnSignalsAsPid1, handleOutputErrors } from "./io.js";
 import { installWarningLog } from "./log.js";
 import { processLogger, run } from "./run.js";
 
@@ -14,6 +14,8 @@ installWarningLog(process, log);
 // an unhandled-EPIPE stack trace.
 handleOutputErrors(process, undefined, log);
 
+// In a container the CLI is PID 1, which ignores a signal nothing listens for.
+exitOnSignalsAsPid1();
 run(argv)
   .then((code) => {
     process.exitCode = code;

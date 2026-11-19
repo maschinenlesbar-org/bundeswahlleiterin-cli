@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command, InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
+import { readContainerLimits } from "./limits.js";
 import { defaultIO } from "./io.js";
 import { BundeswahlClient } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/client";
 import { DEFAULT_BASE_URL, MAX_RETRIES } from "@maschinenlesbar.org/bundeswahlleiterin-client/internal/engine";
@@ -33,6 +34,8 @@ export const VERSION = readVersion();
 
 /** Default dependencies: real client + real stdout/stderr/filesystem. */
 export const defaultDeps: CliDeps = {
+  // In a container: the memory and pids limits (cgroup), for action()'s checks.
+  limits: () => readContainerLimits(),
   io: defaultIO,
   createClient: (options) => new BundeswahlClient(options),
 };
