@@ -1,6 +1,6 @@
 {
   "name": "@maschinenlesbar.org/bundeswahlleiterin-mcp",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "MCP server for the Bundeswahlleiterin API, for AI agents (stdio and Streamable HTTP)",
   "type": "module",
   "bin": {
