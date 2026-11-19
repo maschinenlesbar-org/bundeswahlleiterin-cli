@@ -43,8 +43,11 @@ export interface ToolDefinition {
   inputSchema: JsonSchema;
   /** One object schema with status, source and licence. */
   outputSchema: JsonSchema;
-  /** The path under the API's base the answer comes from (`source`), or how to make it from the arguments. */
-  source: string | ((args: Record<string, unknown>) => string);
+  /**
+   * The path under the API's base the answer comes from (`source`), or how to make it from the
+   * arguments and that base. An absolute URL (an API on a second host) is used as it is.
+   */
+  source: string | ((args: Record<string, unknown>, apiBase: string) => string);
   /** For a paged list: which list `nextOffset` counts, and where the page began. */
   paged?: (args: Record<string, unknown>) => { list: string; offset: number };
   run(args: Record<string, unknown>, context: ToolContext): Promise<Record<string, unknown>>;
@@ -122,7 +125,8 @@ export async function callTool(
     const answer = await callSignal.run(signal, () =>
       untilAborted(tool.run(args, { client: env.client, signal, maxPages: env.config.maxPages, apiBase: env.apiBase }), signal),
     );
-    const source = `${env.apiBase}/${typeof tool.source === "function" ? tool.source(args) : tool.source}`;
+    const path = typeof tool.source === "function" ? tool.source(args, env.apiBase) : tool.source;
+    const source = /^https?:\/\//.test(path) ? path : `${env.apiBase}/${path}`;
     const shaped = fitResult(cleanStrings({ ...answer, source, licence: LICENCE }), env.config.maxResultChars, tool.paged?.(args));
     return { content: [{ type: "text", text: JSON.stringify(shaped) }], structuredContent: shaped };
   } catch (err) {

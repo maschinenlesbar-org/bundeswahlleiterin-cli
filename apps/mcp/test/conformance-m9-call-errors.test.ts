@@ -95,3 +95,15 @@ test("an answer over the server's size cap is a tool error that says what to ask
   assert.match(text, /is larger than this server accepts \(16 MiB\)\. \S/);
   await connection.close();
 });
+
+test("a result's source is the tool's path under the API's base, made from the arguments and the base; an absolute URL (an API on a second host) is used as it is", async () => {
+  const { env: e } = env(hanging.transport);
+  const sourceOf = async (source: ToolDefinition["source"]): Promise<unknown> => {
+    const probe: ToolDefinition = { ...tool, source, run: async () => ({ status: "ok" }) };
+    return (await callTool(probe, { id: "a b" }, new AbortController().signal, { ...e, apiBase: "https://api.example/v1" })).structuredContent?.["source"];
+  };
+  assert.equal(await sourceOf("items"), "https://api.example/v1/items");
+  assert.equal(await sourceOf((args) => `items/${String(args["id"])}`), "https://api.example/v1/items/a b");
+  assert.equal(await sourceOf((_args, base) => `${base.replace("api.", "files.")}/feed.json`), "https://files.example/v1/feed.json");
+  assert.equal(await sourceOf(() => "http://other.example/feed.json"), "http://other.example/feed.json");
+});
