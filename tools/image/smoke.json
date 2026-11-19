@@ -1,0 +1,15 @@
+{
+  "comment": "What tools/image/smoke.mjs needs that is particular to this repo: the bin (its log topic), a command that makes one request, the exit code of a network error, the mock's answer to that request (by path, under --base-url http://mock:8080; the files are CSV, so a raw answer), and a string the printed answer contains.",
+  "bin": "bundeswahl",
+  "command": [
+    "parties"
+  ],
+  "networkErrorExit": 6,
+  "answers": {
+    "/dam/jcr/925d6e98-3616-465a-835a-cec1ea73abc2/btw25_parteien.csv": {
+      "$raw": "# (c) Die Bundeswahlleiterin, Wiesbaden 2025;;;;\n# Datenlizenz Deutschland – Namensnennung – Version 2.0;;;;\nGruppenschluessel;Gruppenart_XML;Gruppenart_CSV;GruppennameKurz;Gruppenname\n100;SYSTEM_GRUPPE;System-Gruppe;Wahlberechtigte;Wahlberechtigte\n2;PARTEI;Partei;SPD;Sozialdemokratische Partei Deutschlands\n3;PARTEI;Partei;GRÜNE;Smoke-Partei\n28;UEBRIGE;System-Gruppe;Übrige;Übrige\n",
+      "$type": "text/csv; charset=utf-8"
+    }
+  },
+  "expectStdout": "Smoke-Partei"
+}
