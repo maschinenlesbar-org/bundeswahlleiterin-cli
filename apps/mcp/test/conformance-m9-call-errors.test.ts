@@ -30,12 +30,13 @@ const env = (transport: Transport, overrides = {}) => {
 };
 
 test("an upstream error is a tool error naming the request", async () => {
-  const connection = await connect({ transport: makeMockTransport(() => jsonResponse({ error: "no such thing" }, 404)) });
+  // A 500, not a 404: a tool may rightly answer a 404 as empty with a reason ("not published yet").
+  const connection = await connect({ transport: makeMockTransport(() => jsonResponse({ error: "internal error" }, 500)) });
   const result = await connection.call(CALL.name, CALL.arguments);
   assert.equal(result.isError, true);
   const text = result.content[0]?.text ?? "";
   assert.ok(text.includes(new URL(apiBase(undefined)).host), text);
-  assert.match(text, /404/);
+  assert.match(text, /500/);
   assert.equal(result.structuredContent, undefined, "an error result carries text only");
   await connection.close();
 });
