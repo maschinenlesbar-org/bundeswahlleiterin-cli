@@ -63,12 +63,12 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "Bundestagswahl 2025 result of an area",
     description: [
       'How an area voted in the Bundestagswahl 2025: turnout, valid and invalid votes, and every party\'s votes and share with the change since 2021. Use it for "Wahlergebnis Bayern", "wie hat München-Nord gewählt?", "Zweitstimmen der AfD in Sachsen", "election result in Wahlkreis 212", "who won Berlin-Mitte?".',
-      "Second votes (the party result people usually mean) unless vote is 1. area is a Land or Wahlkreis name or a number (Bund: areaType Bund); numbers overlap between Länder (1-16) and Wahlkreise (1-299), so give areaType with a number. A name that matches several areas is ambiguous, with the candidates, never one picked. In a Wahlkreis, constituency says which party had the most first votes and whose candidate was elected: under the 2025 law the winner gets the seat only if the party's second votes cover it, so elected can be none.",
+      "Second votes (the party result people usually mean) unless vote is 1. area is a Land or Wahlkreis name or a number; for Germany as a whole give areaType Bund (the area is then not matched) or area 'Bund'; numbers overlap between Länder (1-16) and Wahlkreise (1-299), so give areaType with a number. A name that matches several areas is ambiguous, with the candidates, never one picked. In a Wahlkreis, constituency says which party had the most first votes and whose candidate was elected: under the 2025 law the winner gets the seat only if the party's second votes cover it, so elected can be none.",
       RULES,
     ].join("\n\n"),
     inputSchema: input(
       {
-        area: text('A Land or Wahlkreis name or part of it ("Bayern", "München-Nord") or a number ("212").'),
+        area: text('A Land or Wahlkreis name or part of it ("Bayern", "München-Nord"), a number ("212"), or "Bund"; not matched with areaType Bund.'),
         areaType: { type: "string", enum: ["Bund", "Land", "Wahlkreis"], description: "The area level; needed with a number." },
         vote: { type: "integer", minimum: 1, maximum: 2, description: "1: first votes (Erststimme, the direct mandate); 2: second votes (Zweitstimme, default)." },
       },

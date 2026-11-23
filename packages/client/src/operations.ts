@@ -48,7 +48,7 @@ export type ElectionResult =
 const SYSTEM = "System-Gruppe";
 
 /**
- * One area's result: the Bund (area "99" or "Bund"), a Land or a Wahlkreis by number or name.
+ * One area's result: the Bund (area "99" or "Bund", or areaType "Bund" with any area), a Land or a Wahlkreis by number or name.
  * Second votes unless `vote` is 1. A name that matches several areas is ambiguous, with the
  * candidates, never one picked; the totals are matched by their exact name (Gültige, not
  * Ungültige), parties without votes are dropped before sorting.
@@ -59,7 +59,9 @@ export async function getElectionResult(
 ): Promise<ElectionResult> {
   const vote: Vote = input.vote ?? 2;
   const area = input.area.trim();
-  const rows = await client.results({ ...(input.areaType === undefined ? {} : { areaType: input.areaType }), area });
+  // There is one Bund, "Bundesgebiet" in the file: with areaType Bund the area isn't matched,
+  // so "Deutschland" or "Germany" answers too, not "No area matches".
+  const rows = await client.results(input.areaType === "Bund" ? { areaType: "Bund" } : { ...(input.areaType === undefined ? {} : { areaType: input.areaType }), area });
   const areas = new Map<string, Area>();
   for (const row of rows) areas.set(`${row.gebietsart}/${row.gebietsnummer}`, { type: row.gebietsart, number: row.gebietsnummer, name: row.gebietsname });
   if (areas.size === 0) {

@@ -81,3 +81,11 @@ test("getElectionResult: a name exact but for its form (NFD, case, a dash) picks
     if (r.status === "ok") assert.equal(r.area.number, area.startsWith("Lev") ? "101" : "093", area);
   }
 });
+
+test("getElectionResult: with areaType Bund the one Bund answers, whatever the area says", async () => {
+  for (const area of ["Deutschland", "Germany", "Bund", "99"]) {
+    const r = await getElectionResult(results, { area, areaType: "Bund" });
+    assert.equal(r.status, "ok", area);
+    if (r.status === "ok") assert.deepEqual(r.area, { type: "Bund", number: "99", name: "Bundesgebiet" }, area);
+  }
+});
