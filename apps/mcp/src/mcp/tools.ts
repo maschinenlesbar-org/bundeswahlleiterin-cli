@@ -94,7 +94,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       RULES,
     ].join("\n\n"),
     inputSchema: input({
-      name: text("Part of the Wahlkreis name (any case)."),
+      name: text('Part of the Wahlkreis name: any case, "ss" for "ß", "-" for any dash ("Flensburg - Schleswig").'),
       land: text('A Land name, abbreviation ("SN") or number ("14").', 40),
       number: { type: "string", pattern: "^\\d{1,3}$", description: 'A Wahlkreis number ("5" or "005").' },
       offset: { type: "integer", minimum: 0, maximum: 299, description: "Where the page starts (default 0)." },

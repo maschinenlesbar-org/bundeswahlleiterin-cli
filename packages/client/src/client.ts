@@ -67,12 +67,12 @@ export type BundeswahlClientOptions = EngineOptions;
  * the upper-case form of "Gießen" is "GIESSEN", so `--area GIESSEN` must find it, while
  * `toLowerCase()` alone maps "SS" to "ss" and never to "ß" (six Wahlkreis names have one).
  */
-function fold(text: string): string {
+export function fold(text: string): string {
   return text.normalize("NFC").toLowerCase().replace(/ß/g, "ss").replace(/[\u2010-\u2015\u2212]/g, "-");
 }
 
 /** Case-, normalisation- and dash-insensitive substring test (see {@link fold}). */
-function includesCi(haystack: string, needle: string): boolean {
+export function includesCi(haystack: string, needle: string): boolean {
   return fold(haystack).includes(fold(needle.trim()));
 }
 

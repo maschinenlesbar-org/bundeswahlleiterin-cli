@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BundeswahlClient, findWahlkreise, getElectionResult, getStructureData } from "../src/index.js";
-import { smallElection, structureCsv, wahlkreiseCsv } from "./fixtures.js";
+import { smallElection, structureCsv, wahlkreiseCsv, wahlkreiseWith } from "./fixtures.js";
 import { csvResponse, makeMockTransport } from "./helpers.js";
 
 const client = (body: string) => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(body)).transport });
@@ -53,4 +53,11 @@ test("getStructureData: the values as published, the footnote apart; an unknown 
   assert.equal(data?.name, "München-Nord");
   assert.equal(data?.values["Fläche (km²)"], "100,0");
   assert.equal(await getStructureData(c, { wahlkreis: "298" }), undefined);
+});
+
+test("findWahlkreise matches a name as every other filter does: dash variants, upper-case SS for ß, NFD", async () => {
+  const c = client(wahlkreiseWith(["001;Flensburg – Schleswig;01;Schleswig-Holstein;SH", "173;Gießen;06;Hessen;HE", "093;Köln II;05;Nordrhein-Westfalen;NW"]));
+  for (const [name, nr] of [["Flensburg - Schleswig", "001"], ["GIESSEN", "173"], ["giessen", "173"], ["Köln", "093"], ["KÖLN", "093"]] as const) {
+    assert.deepEqual((await findWahlkreise(c, { name })).wahlkreise.map((w) => w.nr), [nr], name);
+  }
 });

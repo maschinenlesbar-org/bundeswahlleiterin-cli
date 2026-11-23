@@ -5,7 +5,7 @@
 // - findWahlkreise: constituencies by name, Land or number (bundeswahl-reference);
 // - getStructureData: one Wahlkreis' structural data, with its footnote (bundeswahl-reference).
 
-import type { BundeswahlClient } from "./client.js";
+import { includesCi, type BundeswahlClient } from "./client.js";
 import type { AreaType, ResultRow, StructureRow, Vote, Wahlkreis } from "./types.js";
 
 /** One party's result in an area, for one ballot. */
@@ -104,7 +104,9 @@ export async function getElectionResult(
 }
 
 /**
- * Wahlkreise by name (contains, any case), Land (a name contains it, or its abbreviation or
+ * Wahlkreise by name (contains, folded as every other filter of the client: any case, ß and
+ * "SS" alike, NFC, every dash variant as "-", so "Flensburg - Schleswig" finds "Flensburg –
+ * Schleswig" and "GIESSEN" finds "Gießen"), Land (a name contains it, or its abbreviation or
  * number: "Sachsen" also matches Niedersachsen and Sachsen-Anhalt, "SN" only Sachsen) or number
  * (leading zeros ignored).
  */
@@ -113,9 +115,9 @@ export async function findWahlkreise(
   input: { name?: string | undefined; land?: string | undefined; number?: string | undefined } = {},
 ): Promise<{ total: number; wahlkreise: Wahlkreis[] }> {
   const all = await client.wahlkreise(input.land === undefined ? {} : { land: input.land });
-  const name = input.name?.trim().toLowerCase();
+  const name = input.name;
   const number = input.number?.trim().replace(/^0+(?=\d)/, "");
-  const found = all.filter((w) => (name === undefined || w.name.toLowerCase().includes(name)) && (number === undefined || w.nr.replace(/^0+(?=\d)/, "") === number));
+  const found = all.filter((w) => (name === undefined || includesCi(w.name, name)) && (number === undefined || w.nr.replace(/^0+(?=\d)/, "") === number));
   return { total: found.length, wahlkreise: found };
 }
 
