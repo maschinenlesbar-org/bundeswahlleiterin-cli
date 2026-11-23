@@ -38,7 +38,7 @@ test("findWahlkreise, getStructureData (an unknown number is empty with a reason
   assert.deepEqual((found.structuredContent?.["wahlkreise"] as { nr: string }[]).map((w) => w.nr), ["212"]);
   const data = await connection.call("getStructureData", { wahlkreis: "1" });
   assert.equal(data.structuredContent?.["name"], "Flensburg – Schleswig");
-  const none = await connection.call("getStructureData", { wahlkreis: "298" });
+  const none = await connection.call("getStructureData", { wahlkreis: "300" });
   assert.equal(none.structuredContent?.["status"], "empty");
   const parties = await connection.call("listParties", {});
   assert.deepEqual((parties.structuredContent?.["parties"] as { short: string }[]).map((p) => p.short), ["SPD", "GRÜNE"]);

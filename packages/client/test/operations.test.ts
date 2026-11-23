@@ -52,7 +52,7 @@ test("getStructureData: the values as published, the footnote apart; an unknown 
   const data = await getStructureData(c, { wahlkreis: "212" });
   assert.equal(data?.name, "München-Nord");
   assert.equal(data?.values["Fläche (km²)"], "100,0");
-  assert.equal(await getStructureData(c, { wahlkreis: "298" }), undefined);
+  assert.equal(await getStructureData(c, { wahlkreis: "300" }), undefined);
 });
 
 test("findWahlkreise matches a name as every other filter does: dash variants, upper-case SS for ß, NFD", async () => {

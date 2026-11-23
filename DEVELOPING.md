@@ -296,7 +296,9 @@ so it is a `BundeswahlParseError` instead of partial data or `[]` with exit 0:
 - `parties`: the list ends with the "Übrige" group (`Gruppenart_XML` `UEBRIGE`).
 - `wahlkreise`: the file has no closing row, so the election's own size is the check:
   Wahlkreise 1–299 (`BTW2025_WAHLKREISE`), each once.
-- `structure`: the file ends with the national "Insgesamt" row (`Wahlkreis-Nr.` 999).
+- `structure`: the file ends with the national "Insgesamt" row (`Wahlkreis-Nr.` 999), and
+  it has a row for each of the Wahlkreise 1–299, once: a file without one answered that
+  Wahlkreis as not existing.
 
 The test fixtures are complete in this sense (`packages/client/test/fixtures.ts`).
 

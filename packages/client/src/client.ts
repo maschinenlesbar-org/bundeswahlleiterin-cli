@@ -572,12 +572,21 @@ export class BundeswahlClient {
           '"Insgesamt" (Wahlkreis-Nr. 999); it is truncated or not the published one.',
       );
     }
-    if (includeAggregates !== true) {
-      rows = rows.filter((r) => {
-        const nr = (r["Wahlkreis-Nr."] ?? "").trim();
-        return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= BTW2025_WAHLKREISE;
-      });
+    // Ending with 999 is not enough: a file without a Wahlkreis' row (cut out, or not the
+    // published one) answered that Wahlkreis as not existing. The election's own size is
+    // the check, as for the Wahlkreis list: Wahlkreise 1–299, each once.
+    const isKreis = (r: StructureRow): boolean => {
+      const nr = (r["Wahlkreis-Nr."] ?? "").trim();
+      return /^\d+$/.test(nr) && Number(nr) >= 1 && Number(nr) <= BTW2025_WAHLKREISE;
+    };
+    const kreise = rows.filter(isKreis);
+    if (kreise.length !== BTW2025_WAHLKREISE || new Set(kreise.map((r) => Number(r["Wahlkreis-Nr."]))).size !== BTW2025_WAHLKREISE) {
+      throw new BundeswahlParseError(
+        `${request}: Malformed CSV: the file has ${kreise.length} Wahlkreis rows, not the ${BTW2025_WAHLKREISE} Wahlkreise ` +
+          `numbered 1–${BTW2025_WAHLKREISE} each once — the file is truncated or not the published one.`,
+      );
     }
+    if (includeAggregates !== true) rows = kreise;
     if (wahlkreis !== undefined) {
       const w = wahlkreis.trim();
       const wNum = w.replace(/^0+/, "");

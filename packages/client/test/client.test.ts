@@ -101,7 +101,7 @@ test("structure() hits its path and filters by Wahlkreis (leading zeros ignored,
   const c = new BundeswahlClient({ transport: mt.transport });
   const all = await c.structure();
   assert.equal(pathOf(mt.last().url), BTW2025.structure);
-  assert.equal(all.length, 2); // the "Land insgesamt" (901) aggregate row is dropped
+  assert.equal(all.length, 299); // the "Land insgesamt" (901) aggregate row is dropped
   assert.ok(all.every((r) => r["Wahlkreis-Nr."] !== "901"));
   assert.equal(all[0]!["Wahlkreis-Name"], "Flensburg – Schleswig");
 
@@ -218,12 +218,7 @@ test("name filters match across NFD umlauts and hyphen vs en dash", async () => 
 });
 
 test("name filters fold case fully: upper-case SS matches a name with ß, and ß matches SS", async () => {
-  const csv =
-    "Land;Wahlkreis-Nr.;Wahlkreis-Name;Fläche (km²)\n" +
-    "Hessen;173;Gießen;854,6\n" +
-    "Sachsen;155;Meißen;1452,3\n" +
-    "Hessen;185;Groß-Gerau;453,0\n" +
-    "Deutschland;999;Insgesamt;357684,2\n";
+  const csv = fx.structureWith(["Hessen;173;Gießen;854,6;1,0", "Sachsen;155;Meißen;1452,3;1,0", "Hessen;185;Groß-Gerau;453,0;1,0"]);
   const st = () => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
   for (const name of ["GIESSEN", "giessen", "Giessen", "GIEẞEN", "Gießen", "GIEßEN"]) {
     assert.deepEqual((await st().structure({ wahlkreis: name })).map((r) => r["Wahlkreis-Nr."]), ["173"], name);
@@ -473,4 +468,20 @@ test("results() refuses a file whose Gewählt column names no one in a Wahlkreis
   );
   const ok = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.smallElection)).transport });
   assert.ok((await ok.results({ area: "Kiel" })).length > 0);
+});
+
+test("structure() refuses a file without every Wahlkreis 1-299 once, even when it still ends with the 999 row", async () => {
+  const missing = fx.structureCsv.replace("Bayern;212;München-Nord;100,0;250,0\n", "");
+  const doubled = fx.structureCsv.replace("Testland;5;Testkreis;1,0;1,0\n", "Testland;4;Testkreis;1,0;1,0\n");
+  for (const [label, csv, count] of [["missing", missing, 298], ["doubled", doubled, 299]] as const) {
+    assert.notEqual(csv, fx.structureCsv, label);
+    const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(csv)).transport });
+    await assert.rejects(
+      () => c.structure({ wahlkreis: "212" }),
+      (e: unknown) =>
+        e instanceof BundeswahlParseError &&
+        e.message.includes(`the file has ${count} Wahlkreis rows, not the 299 Wahlkreise numbered 1–299 each once — the file is truncated or not the published one`),
+      label,
+    );
+  }
 });

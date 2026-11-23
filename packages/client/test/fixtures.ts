@@ -64,15 +64,33 @@ export function wahlkreiseWith(rows: readonly string[]): string {
   );
 }
 
-/** Strukturdaten: `#` preamble, a `Spalten-Nr.` row, then the real header (starts "Land") + rows. */
-export const structureCsv =
-  "# Strukturdaten für die Wahlkreise;;;;\n" +
-  "Spalten-Nr.;;;1;2\n" +
-  "Land;Wahlkreis-Nr.;Wahlkreis-Name;Fläche (km²);Bevölkerung\n" +
-  "Schleswig-Holstein;1;Flensburg – Schleswig;2128,1;301,2\n" +
-  "Bayern;212;München-Nord;100,0;250,0\n" +
-  "Schleswig-Holstein;901;Land insgesamt;15804,3;2953,3\n" + // an aggregate row (dropped)
-  "Deutschland;999;Insgesamt;357684,2;83456,0\n"; // the national one, which closes the file
+/**
+ * Strukturdaten: `#` preamble, a `Spalten-Nr.` row, then the real header (starts "Land") and
+ * a row for each of the 299 Wahlkreise (the client refuses a file without all of them): two
+ * real ones, the rest "Testkreis" in "Testland" (no digit in the name, so a number filter
+ * never matches it by name), then a Land's summary row (901) and the national one (999),
+ * which closes the file.
+ */
+export const structureCsv = structureWith([
+  "Schleswig-Holstein;1;Flensburg – Schleswig;2128,1;301,2",
+  "Bayern;212;München-Nord;100,0;250,0",
+]);
+
+/**
+ * A complete Strukturdaten file holding the given Wahlkreis rows (`"Hessen;173;Gießen;1,0;2,0"`)
+ * at their numbers and a "Testkreis" row everywhere else, then the 901 and 999 summary rows.
+ */
+export function structureWith(rows: readonly string[]): string {
+  const byNumber = new Map(rows.map((r) => [r.split(";")[1], r]));
+  return (
+    "# Strukturdaten für die Wahlkreise;;;;\n" +
+    "Spalten-Nr.;;;1;2\n" +
+    "Land;Wahlkreis-Nr.;Wahlkreis-Name;Fläche (km²);Bevölkerung\n" +
+    Array.from({ length: 299 }, (_, i) => `${byNumber.get(String(i + 1)) ?? `Testland;${i + 1};Testkreis;1,0;1,0`}\n`).join("") +
+    "Schleswig-Holstein;901;Land insgesamt;15804,3;2953,3\n" + // an aggregate row (dropped)
+    "Deutschland;999;Insgesamt;357684,2;83456,0\n" // the national one, which closes the file
+  );
+}
 
 /** A minimal HTML error page (what the site returns for an unknown path). */
 export const htmlShell = "<!doctype html>\n<html><head><title>404</title></head><body>Not found</body></html>";
