@@ -211,6 +211,15 @@ function assertCompleteResults(rows: readonly ResultRow[], request: string, quot
       throw truncated(`the Wahlkreise of ${quote(land.gebietsname)} don't add up to the Land's Wahlberechtigte`);
     }
   }
+  // Every Wahlkreis names the party elected there in its "Gewählt" column, or "–" when the
+  // winner got no seat (2025 law). An emptied column used to answer `elected: null`, "no seat",
+  // for every Wahlkreis.
+  const named = new Set(rows.filter((r) => r.gebietsart === "Wahlkreis" && r.gewaehlt !== "").map(areaKey));
+  for (const r of eligible.values()) {
+    if (r.gebietsart === "Wahlkreis" && !named.has(areaKey(r))) {
+      throw truncated(`Wahlkreis ${quote(r.gebietsname)} names no one in its "Gewählt" column (the party elected there, or "–")`);
+    }
+  }
 }
 
 /** The kerg2 columns parsed as numbers. */

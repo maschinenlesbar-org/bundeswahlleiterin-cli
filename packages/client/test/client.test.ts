@@ -427,7 +427,8 @@ test("a results file with more Länder or Wahlkreise than the election has is re
   // (leading zeros ignored, as "01" and "1" name one Land).
   const full = body([
     ...Array.from({ length: 16 }, (_, i) => eligible("Land", String(i + 1).padStart(2, "0"))),
-    ...Array.from({ length: 299 }, (_, i) => eligible("Wahlkreis", String(i + 1).padStart(3, "0"), String((i % 16) + 1))),
+    // Each Wahlkreis names who was elected there ("–": no one), as the published file does.
+    ...Array.from({ length: 299 }, (_, i) => eligible("Wahlkreis", String(i + 1).padStart(3, "0"), String((i % 16) + 1)).replace(/;$/, ";–")),
   ]);
   const ok = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(full)).transport });
   assert.equal((await ok.results({ areaType: "Land" })).length, 16);
@@ -457,4 +458,19 @@ test("a cell or header name the client quotes in a parse error is scrubbed of th
       }
     }
   }
+});
+
+test("results() refuses a file whose Gewählt column names no one in a Wahlkreis, never 'nobody got the seat'", async () => {
+  // In the published file a Wahlkreis' rows name the party elected there, or "–" when the
+  // winner got no seat; an emptied column is not that file, and read as is every Wahlkreis
+  // would answer elected: null.
+  const emptied = fx.smallElection.replace(/;(–|GRÜNE|CSU)$/gm, ";");
+  assert.notEqual(emptied, fx.smallElection);
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(emptied)).transport });
+  await assert.rejects(
+    () => c.results({ area: "Kiel" }),
+    (e: unknown) => e instanceof BundeswahlParseError && /the file is incomplete — Wahlkreis "Flensburg – Schleswig" names no one in its "Gewählt" column/.test(e.message),
+  );
+  const ok = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.smallElection)).transport });
+  assert.ok((await ok.results({ area: "Kiel" })).length > 0);
 });

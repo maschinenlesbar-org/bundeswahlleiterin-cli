@@ -290,7 +290,9 @@ so it is a `BundeswahlParseError` instead of partial data or `[]` with exit 0:
   Wahlkreise' (`UegGebietsnummer`). A cut at an area boundary breaks a sum. A file with more
   than 16 Länder or 299 Wahlkreise (`BTW2025_WAHLKREISE`) is refused before any sum, and the
   Wahlkreise are summed per Land in one pass, so a hostile answer of many areas costs linear
-  time (a scan per Land held 80 000 of them for 20 s, after the body had arrived).
+  time (a scan per Land held 80 000 of them for 20 s, after the body had arrived). Every
+  Wahlkreis names someone in its `Gewählt` column (the party elected there, or "–" when the
+  winner got no seat): an emptied column read as "no seat" in every Wahlkreis.
 - `parties`: the list ends with the "Übrige" group (`Gruppenart_XML` `UEBRIGE`).
 - `wahlkreise`: the file has no closing row, so the election's own size is the check:
   Wahlkreise 1–299 (`BTW2025_WAHLKREISE`), each once.
