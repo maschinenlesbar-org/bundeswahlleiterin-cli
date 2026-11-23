@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { listTools } from "../src/mcp/server.js";
+import { SIZE_HINT, TOOLS } from "../src/mcp/tools.js";
 import { connect } from "./harness.js";
 import { bundeswahl } from "./helpers.js";
 
@@ -50,4 +51,25 @@ test("findWahlkreise: a blank name is refused like a blank land, never a list of
   assert.equal(result.isError, true, JSON.stringify(result.structuredContent));
   assert.match(result.content[0]?.text ?? "", /Invalid name: /);
   await connection.close();
+});
+
+test("the deadline's and the size cap's advice fit every tool: one whole file per call, an option only with the tools that take it", async () => {
+  const hanging = { transport: (): Promise<never> => new Promise<never>(() => {}) };
+  const args: Record<string, Record<string, unknown>> = { getElectionResult: { area: "Kiel" }, findWahlkreise: { land: "SH" }, getStructureData: { wahlkreis: "1" }, listParties: {} };
+  const schemas = new Map(TOOLS.map((tool) => [tool.name, Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)]));
+  for (const tool of TOOLS) {
+    const connection = await connect({ transport: hanging, config: { callTimeoutMs: 30 } });
+    const text = (await connection.call(tool.name, args[tool.name] ?? {})).content[0]?.text ?? "";
+    await connection.close();
+    assert.match(text, /took longer than .* and was stopped/, tool.name);
+    assert.match(text, /whole file .* whatever its arguments/, tool.name);
+    assert.match(text, /try again/, tool.name);
+    assert.doesNotMatch(text, /results file|one area at a time/, `${tool.name}: ${text}`);
+  }
+  for (const advice of [SIZE_HINT]) {
+    assert.doesNotMatch(advice, /Narrow the Wahlkreise/);
+    const pairs = [...advice.matchAll(/(\w+) \((\w+(?:, \w+)*)\)/g)];
+    assert.ok(pairs.length >= 1, advice);
+    for (const [, option, tools] of pairs) for (const tool of (tools as string).split(", ")) assert.ok(schemas.get(tool)?.includes(option as string), `${tool} takes no ${option}`);
+  }
 });
