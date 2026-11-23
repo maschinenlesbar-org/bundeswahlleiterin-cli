@@ -89,3 +89,16 @@ test("getElectionResult: with areaType Bund the one Bund answers, whatever the a
     if (r.status === "ok") assert.deepEqual(r.area, { type: "Bund", number: "99", name: "Bundesgebiet" }, area);
   }
 });
+
+test("getStructureData: a Land's (901-916) and the Bund's (999) summary rows by their numbers, with their level", async () => {
+  const c = client(structureCsv);
+  const land = await getStructureData(c, { wahlkreis: "901" });
+  assert.equal(land?.level, "Land");
+  assert.equal(land?.values["Land"], "Schleswig-Holstein");
+  assert.equal(land?.values["Fläche (km²)"], "15804,3");
+  const bund = await getStructureData(c, { wahlkreis: "999" });
+  assert.equal(bund?.level, "Bund");
+  assert.equal(bund?.name, "Insgesamt");
+  assert.equal((await getStructureData(c, { wahlkreis: "212" }))?.level, "Wahlkreis");
+  for (const none of ["902", "950", "300"]) assert.equal(await getStructureData(c, { wahlkreis: none }), undefined, none);
+});

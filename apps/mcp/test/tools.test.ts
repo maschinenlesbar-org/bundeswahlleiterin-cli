@@ -73,3 +73,16 @@ test("the deadline's and the size cap's advice fit every tool: one whole file pe
     for (const [, option, tools] of pairs) for (const tool of (tools as string).split(", ")) assert.ok(schemas.get(tool)?.includes(option as string), `${tool} takes no ${option}`);
   }
 });
+
+test("getStructureData: a Land's and Germany's summary rows by their numbers, with their level", async () => {
+  const connection = await connect({ transport: world });
+  const land = await connection.call("getStructureData", { wahlkreis: "901" });
+  assert.equal(land.structuredContent?.["status"], "ok", land.content[0]?.text);
+  assert.equal(land.structuredContent?.["level"], "Land");
+  assert.equal((land.structuredContent?.["values"] as Record<string, string>)["Land"], "Schleswig-Holstein");
+  const bund = await connection.call("getStructureData", { wahlkreis: "999" });
+  assert.equal(bund.structuredContent?.["level"], "Bund");
+  const none = await connection.call("getStructureData", { wahlkreis: "950" });
+  assert.match(String(none.structuredContent?.["reason"]), /901 to 916, Germany's is 999/);
+  await connection.close();
+});

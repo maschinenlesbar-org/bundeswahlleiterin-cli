@@ -129,8 +129,15 @@ export async function findWahlkreise(
 
 /** The answer of {@link getStructureData}. */
 export interface StructureData {
+  /** The row's number: a Wahlkreis (1–299), a Land's summary row (901–916), the Bund's (999). */
   wahlkreis: string;
   name: string;
+  /**
+   * What the row is about: a Wahlkreis, a Land (its summary row, "Land insgesamt") or the Bund
+   * ("Insgesamt"). The summary rows are the published figures for a Land or Germany; summing
+   * Wahlkreise double-counts where a city's Wahlkreise repeat the city-wide value.
+   */
+  level: AreaType;
   /** Column name -> value, as the file has them (German decimal comma kept: "128,0"). */
   values: Record<string, string>;
   /**
@@ -140,10 +147,22 @@ export interface StructureData {
   footnote?: string;
 }
 
-/** One Wahlkreis' structural data (Strukturdaten), number with or without leading zeros. */
+/** The level of a Strukturdaten row by its number: 901–916 a Land's summary row, 999 the Bund's. */
+function structureLevel(nr: string): AreaType {
+  const n = /^\d+$/.test(nr) ? Number(nr) : Number.NaN;
+  return n === 999 ? "Bund" : n >= 901 && n <= 916 ? "Land" : "Wahlkreis";
+}
+
+/**
+ * One Wahlkreis' structural data (Strukturdaten), number with or without leading zeros; or, by
+ * its number, a Land's summary row (901–916: 900 + the Land's number) or the Bund's (999), the
+ * published figures a sum of Wahlkreise can't give.
+ */
 export async function getStructureData(client: BundeswahlClient, input: { wahlkreis: string }): Promise<StructureData | undefined> {
-  const rows: StructureRow[] = await client.structure({ wahlkreis: input.wahlkreis });
-  const row = rows[0];
+  const asked = input.wahlkreis.trim().replace(/^0+(?=\d)/, "");
+  const summary = structureLevel(asked) !== "Wahlkreis";
+  const rows: StructureRow[] = await client.structure({ wahlkreis: input.wahlkreis, ...(summary ? { includeAggregates: true } : {}) });
+  const row = summary ? rows.find((r) => (r["Wahlkreis-Nr."] ?? "").replace(/^0+(?=\d)/, "") === asked) : rows[0];
   if (row === undefined) return undefined;
   const values = { ...row } as Record<string, string>;
   const footnote = values["Fußnoten"];
@@ -151,6 +170,7 @@ export async function getStructureData(client: BundeswahlClient, input: { wahlkr
   return {
     wahlkreis: values["Wahlkreis-Nr."] ?? input.wahlkreis.trim(),
     name: values["Wahlkreis-Name"] ?? "",
+    level: structureLevel((values["Wahlkreis-Nr."] ?? "").replace(/^0+(?=\d)/, "")),
     values,
     ...(footnote ? { footnote } : {}),
   };
