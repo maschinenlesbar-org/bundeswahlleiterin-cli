@@ -5,7 +5,7 @@
 // - findWahlkreise: constituencies by name, Land or number (bundeswahl-reference);
 // - getStructureData: one Wahlkreis' structural data, with its footnote (bundeswahl-reference).
 
-import { includesCi, type BundeswahlClient } from "./client.js";
+import { includesCi, textFilter, type BundeswahlClient } from "./client.js";
 import type { AreaType, ResultRow, StructureRow, Vote, Wahlkreis } from "./types.js";
 
 /** One party's result in an area, for one ballot. */
@@ -108,15 +108,17 @@ export async function getElectionResult(
  * "SS" alike, NFC, every dash variant as "-", so "Flensburg - Schleswig" finds "Flensburg –
  * Schleswig" and "GIESSEN" finds "Gießen"), Land (a name contains it, or its abbreviation or
  * number: "Sachsen" also matches Niedersachsen and Sachsen-Anhalt, "SN" only Sachsen) or number
- * (leading zeros ignored).
+ * (leading zeros ignored). A blank name or number, or one of only invisible or control
+ * characters, is a BundeswahlValidationError before any request, as for every filter of the
+ * client: a blank name used to list every Wahlkreis.
  */
 export async function findWahlkreise(
   client: BundeswahlClient,
   input: { name?: string | undefined; land?: string | undefined; number?: string | undefined } = {},
 ): Promise<{ total: number; wahlkreise: Wahlkreis[] }> {
+  const name = textFilter("name", input.name);
+  const number = textFilter("number", input.number)?.trim().replace(/^0+(?=\d)/, "");
   const all = await client.wahlkreise(input.land === undefined ? {} : { land: input.land });
-  const name = input.name;
-  const number = input.number?.trim().replace(/^0+(?=\d)/, "");
   const found = all.filter((w) => (name === undefined || includesCi(w.name, name)) && (number === undefined || w.nr.replace(/^0+(?=\d)/, "") === number));
   return { total: found.length, wahlkreise: found };
 }

@@ -2,7 +2,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BundeswahlClient, findWahlkreise, getElectionResult, getStructureData } from "../src/index.js";
+import { BundeswahlClient, BundeswahlValidationError, findWahlkreise, getElectionResult, getStructureData } from "../src/index.js";
 import { smallElection, structureCsv, wahlkreiseCsv, wahlkreiseWith } from "./fixtures.js";
 import { csvResponse, makeMockTransport } from "./helpers.js";
 
@@ -60,4 +60,13 @@ test("findWahlkreise matches a name as every other filter does: dash variants, u
   for (const [name, nr] of [["Flensburg - Schleswig", "001"], ["GIESSEN", "173"], ["giessen", "173"], ["Köln", "093"], ["KÖLN", "093"]] as const) {
     assert.deepEqual((await findWahlkreise(c, { name })).wahlkreise.map((w) => w.nr), [nr], name);
   }
+});
+
+test("findWahlkreise refuses a blank name or number, and one with only invisible or control characters, before any request", async () => {
+  const mt = makeMockTransport(() => csvResponse(wahlkreiseCsv));
+  const c = new BundeswahlClient({ transport: mt.transport });
+  for (const input of [{ name: " " }, { name: "​" }, { name: "Köln\u0000" }, { number: " " }, { name: 5 as unknown as string }]) {
+    await assert.rejects(() => findWahlkreise(c, input), (e: unknown) => e instanceof BundeswahlValidationError && /^Invalid (name|number): /.test(e.message), JSON.stringify(input));
+  }
+  assert.equal(mt.calls.length, 0);
 });

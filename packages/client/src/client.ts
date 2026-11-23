@@ -90,7 +90,7 @@ const STRUCTURE_KEYS = ["wahlkreis", "includeAggregates"] as const;
  * half character, could only match nothing. Throws BundeswahlValidationError; no request
  * is made.
  */
-function textFilter(name: string, value: unknown): string | undefined {
+export function textFilter(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string") {
     throw new BundeswahlValidationError(`Invalid ${name}: expected a non-empty string, got ${describeValue(value)}.`);

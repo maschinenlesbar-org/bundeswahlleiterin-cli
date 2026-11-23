@@ -43,3 +43,11 @@ test("findWahlkreise, getStructureData (an unknown number is empty with a reason
   assert.deepEqual((parties.structuredContent?.["parties"] as { short: string }[]).map((p) => p.short), ["SPD", "GRÜNE"]);
   await connection.close();
 });
+
+test("findWahlkreise: a blank name is refused like a blank land, never a list of every Wahlkreis", async () => {
+  const connection = await connect({ transport: world });
+  const result = await connection.call("findWahlkreise", { name: " " });
+  assert.equal(result.isError, true, JSON.stringify(result.structuredContent));
+  assert.match(result.content[0]?.text ?? "", /Invalid name: /);
+  await connection.close();
+});
