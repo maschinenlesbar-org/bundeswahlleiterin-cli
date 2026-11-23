@@ -47,6 +47,9 @@ export type ElectionResult =
 
 const SYSTEM = "System-Gruppe";
 
+/** How many candidates an ambiguous answer lists at most. */
+const MAX_CANDIDATES = 25;
+
 /**
  * One area's result: the Bund (area "99" or "Bund", or areaType "Bund" with any area), a Land or a Wahlkreis by number or name.
  * Second votes unless `vote` is 1. A name that matches several areas is ambiguous, with the
@@ -73,7 +76,11 @@ export async function getElectionResult(
     // "Köln I" typed with a decomposed ö matched Köln I-III but was exact for none of them.
     const exact = chosen.filter((a) => fold(a.name) === fold(area));
     if (exact.length === 1) chosen = exact;
-    else return { status: "ambiguous", candidates: chosen.slice(0, 25), reason: `${chosen.length} areas match; ask which one and call again with its number and areaType.` };
+    else {
+      // The candidates are cut at MAX_CANDIDATES; the reason says so, so a cut list isn't read as all.
+      const ask = chosen.length > MAX_CANDIDATES ? `; the first ${MAX_CANDIDATES} are listed. Ask` : "; ask";
+      return { status: "ambiguous", candidates: chosen.slice(0, MAX_CANDIDATES), reason: `${chosen.length} areas match${ask} which one and call again with its number and areaType.` };
+    }
   }
   const one = chosen[0] as Area;
   const mine = rows.filter((r) => r.gebietsart === one.type && r.gebietsnummer === one.number);

@@ -111,3 +111,15 @@ test("getStructureData: each value's column number, from the file's Spalten-Nr. 
   assert.equal(without?.columnNumbers, undefined);
   assert.equal(without?.values["Bevölkerung"], "250,0");
 });
+
+test("getElectionResult: an ambiguous answer with more candidates than it lists says so", async () => {
+  const party = [{ name: "SPD", first: 10, second: 10 }];
+  const kreise = Array.from({ length: 30 }, (_, i) => ({ nr: String(i + 1).padStart(3, "0"), name: `Teststadt ${String.fromCharCode(65 + (i % 26))}${i >= 26 ? "x" : ""}`, land: { nr: "05", name: "Nordrhein-Westfalen" }, eligible: 20, voters: 10, parties: party, elected: "SPD" }));
+  const r = await getElectionResult(client(election(kreise)), { area: "Teststadt" });
+  assert.equal(r.status, "ambiguous");
+  if (r.status !== "ambiguous") return;
+  assert.equal(r.candidates.length, 25);
+  assert.match(r.reason, /^30 areas match; the first 25 are listed\. /);
+  const few = await getElectionResult(results, { area: "1" });
+  if (few.status === "ambiguous") assert.doesNotMatch(few.reason, /listed/);
+});
