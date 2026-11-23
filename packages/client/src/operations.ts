@@ -5,7 +5,7 @@
 // - findWahlkreise: constituencies by name, Land or number (bundeswahl-reference);
 // - getStructureData: one Wahlkreis' structural data, with its footnote (bundeswahl-reference).
 
-import { includesCi, textFilter, type BundeswahlClient } from "./client.js";
+import { fold, includesCi, textFilter, type BundeswahlClient } from "./client.js";
 import type { AreaType, ResultRow, StructureRow, Vote, Wahlkreis } from "./types.js";
 
 /** One party's result in an area, for one ballot. */
@@ -67,7 +67,9 @@ export async function getElectionResult(
   }
   let chosen = [...areas.values()];
   if (chosen.length > 1) {
-    const exact = chosen.filter((a) => a.name.toLowerCase() === area.toLowerCase());
+    // The exact name is compared in the folded form the match used (NFC, case, ß, dashes):
+    // "Köln I" typed with a decomposed ö matched Köln I-III but was exact for none of them.
+    const exact = chosen.filter((a) => fold(a.name) === fold(area));
     if (exact.length === 1) chosen = exact;
     else return { status: "ambiguous", candidates: chosen.slice(0, 25), reason: `${chosen.length} areas match; ask which one and call again with its number and areaType.` };
   }

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BundeswahlClient, BundeswahlValidationError, findWahlkreise, getElectionResult, getStructureData } from "../src/index.js";
-import { smallElection, structureCsv, wahlkreiseCsv, wahlkreiseWith } from "./fixtures.js";
+import { election, smallElection, structureCsv, wahlkreiseCsv, wahlkreiseWith } from "./fixtures.js";
 import { csvResponse, makeMockTransport } from "./helpers.js";
 
 const client = (body: string) => new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(body)).transport });
@@ -69,4 +69,15 @@ test("findWahlkreise refuses a blank name or number, and one with only invisible
     await assert.rejects(() => findWahlkreise(c, input), (e: unknown) => e instanceof BundeswahlValidationError && /^Invalid (name|number): /.test(e.message), JSON.stringify(input));
   }
   assert.equal(mt.calls.length, 0);
+});
+
+test("getElectionResult: a name exact but for its form (NFD, case, a dash) picks that area out of the ones it is part of", async () => {
+  const party = [{ name: "SPD", first: 10, second: 10 }];
+  const koeln = (nr: string, name: string) => ({ nr, name, land: { nr: "05", name: "Nordrhein-Westfalen" }, eligible: 20, voters: 10, parties: party, elected: "SPD" });
+  const c = client(election([koeln("093", "Köln I"), koeln("094", "Köln II"), koeln("095", "Köln III"), koeln("101", "Leverkusen – Köln IV")]));
+  for (const area of ["Köln I", "Köln I", "KÖLN I", "Leverkusen - Köln IV"]) {
+    const r = await getElectionResult(c, { area });
+    assert.equal(r.status, "ok", area);
+    if (r.status === "ok") assert.equal(r.area.number, area.startsWith("Lev") ? "101" : "093", area);
+  }
 });
