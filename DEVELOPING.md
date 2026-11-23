@@ -58,6 +58,7 @@ for (const r of zweitstimme) console.log(r.gruppenname, r.prozent);
 
 const wahlkreise = await client.wahlkreise({ land: "Bayern" });   // 47 rows
 const structure = await client.structure({ wahlkreis: "Kiel" });  // one column→value map
+const { columnNumbers } = await client.structureTable();            // column → its Spalten-Nr.
 
 try {
   await client.parties();

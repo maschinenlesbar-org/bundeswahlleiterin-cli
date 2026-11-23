@@ -86,3 +86,10 @@ test("getStructureData: a Land's and Germany's summary rows by their numbers, wi
   assert.match(String(none.structuredContent?.["reason"]), /901 to 916, Germany's is 999/);
   await connection.close();
 });
+
+test("getStructureData: the column numbers the footnote names come with the values", async () => {
+  const connection = await connect({ transport: world });
+  const data = await connection.call("getStructureData", { wahlkreis: "212" });
+  assert.deepEqual(data.structuredContent?.["columnNumbers"], { "Fläche (km²)": 1, Bevölkerung: 2 });
+  await connection.close();
+});

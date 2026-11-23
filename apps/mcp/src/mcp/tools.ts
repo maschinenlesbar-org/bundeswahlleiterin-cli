@@ -123,12 +123,12 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "Structural data of a Wahlkreis",
     description: [
       'A Wahlkreis\' structural data (Strukturdaten): area, population, age, migration, employment, income, schools and more, as the Bundeswahlleiterin publishes it. Use it for "Strukturdaten Wahlkreis 212", "Arbeitslosenquote in Kiel", "how old is the population in München-Nord?".',
-      'Values are strings with a decimal comma ("128,0"); column names are long, German and dated. Read footnote before comparing: where a city or Kreis forms several Wahlkreise (Berlin, Hamburg, München, Köln, Leipzig), many columns hold the value for the whole city, so those Wahlkreise show identical figures and can\'t be ranked against each other.',
+      'Values are strings with a decimal comma ("128,0"); column names are long, German and dated. Read footnote before comparing: where a city or Kreis forms several Wahlkreise (Berlin, Hamburg, München, Köln, Leipzig), many columns hold the value for the whole city, so those Wahlkreise show identical figures and can\'t be ranked against each other. The footnote names those columns by number ("Spalten 1, 7 bis 14"): columnNumbers gives each value\'s number.',
       "For a Land or Germany as a whole ask for its summary row, never sum or average Wahlkreise (the city-wide values would count several times): 901-916 is a Land (900 + its number, as findWahlkreise's landNr: 909 Bayern), 999 is Germany; level says which.",
       RULES,
     ].join("\n\n"),
     inputSchema: input({ wahlkreis: { type: "string", pattern: "^\\d{1,3}$", description: 'The Wahlkreis number ("212"), from findWahlkreise; or a summary row: 901-916 a Land, 999 Germany.' } }, ["wahlkreis"]),
-    outputSchema: output({ wahlkreis: str_, name: str_, level: { type: "string", enum: ["Wahlkreis", "Land", "Bund"] }, values: obj, footnote: str_ }),
+    outputSchema: output({ wahlkreis: str_, name: str_, level: { type: "string", enum: ["Wahlkreis", "Land", "Bund"] }, values: obj, footnote: str_, columnNumbers: { type: "object", description: "Each value's column number (column name -> number); the footnote names columns by these numbers." } }),
     source: "dam/jcr/181f9e38-38db-4f64-991c-8141dfa0f2cb/btw2025_strukturdaten.csv",
     async run(args, context) {
       const data = await getStructureData(context.client, { wahlkreis: str(args, "wahlkreis") ?? "" });

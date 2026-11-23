@@ -74,7 +74,9 @@ enthalten die Daten nicht.
 wirtschaftliche Indikatoren (Fläche, Bevölkerung, Altersstruktur, Beschäftigung, …),
 veröffentlicht, damit sich die Ergebnisse im Zusammenhang lesen lassen. `structure`
 liefert jeden Wahlkreis als Zuordnung Spalte→Wert; die Spalte `Fußnoten` vermerkt, wo
-eine Spalte einen Wert für die ganze Stadt oder den ganzen Kreis enthält.
+eine Spalte einen Wert für die ganze Stadt oder den ganzen Kreis enthält, und nennt die
+Spalten mit den Nummern der Zeile `Spalten-Nr.` der Datei (`structureTable()` und
+`getStructureData` der Bibliothek geben jede Spaltennummer als `columnNumbers` an).
 
 ## Daten & Format
 

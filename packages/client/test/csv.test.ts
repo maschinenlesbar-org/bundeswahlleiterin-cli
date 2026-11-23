@@ -189,7 +189,7 @@ test("the duplicate-column error strips terminal escapes and bidi controls from 
 
 test("parseCsv with headerColumns finds the header by its names in any position", () => {
   const text = "# preamble;x;y\nb;a;c\n2;1;3\n";
-  assert.deepEqual(parseCsv(text, { headerColumns: ["a", "b", "c"] }), { header: ["b", "a", "c"], rows: [["2", "1", "3"]] });
+  assert.deepEqual(parseCsv(text, { headerColumns: ["a", "b", "c"] }), { header: ["b", "a", "c"], rows: [["2", "1", "3"]], preamble: [["# preamble", "x", "y"]] });
   // A row with half of the names (at least two) counts, so a renamed column can be named.
   assert.deepEqual(parseCsv("x;a;b;z\n1;2;3;4\n", { headerColumns: ["a", "b", "c", "d"] }).header, ["x", "a", "b", "z"]);
   assert.deepEqual(parseCsv("x;a;q\n1;2;3\n", { headerColumns: ["a", "b", "c", "d"] }), { header: [], rows: [] });

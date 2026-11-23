@@ -135,6 +135,23 @@ const WAHLKREIS_COLUMNS = ["WKR_NR", "WKR_NAME", "LAND_NR", "LAND_NAME", "LAND_A
 const STRUCTURE_COLUMNS = ["Land", "Wahlkreis-Nr.", "Wahlkreis-Name"] as const;
 
 /**
+ * Each column's number from the row right above the header whose first cell is "Spalten-Nr."
+ * (the Strukturdaten file numbers its data columns 1–48 there): column name -> number. Cells
+ * that aren't a plain number are left out; no such row gives `{}`.
+ */
+function columnNumbers(parsed: ParsedCsv): Record<string, number> {
+  const row = parsed.preamble?.[parsed.preamble.length - 1];
+  if (row === undefined || (row[0] ?? "").trim() !== "Spalten-Nr.") return {};
+  // Object.fromEntries defines own properties, so a column named "__proto__" stays a key.
+  return Object.fromEntries(
+    parsed.header.flatMap((name, i) => {
+      const cell = (row[i] ?? "").trim();
+      return name !== "" && /^\d{1,4}$/.test(cell) ? [[name, Number(cell)] as const] : [];
+    }),
+  );
+}
+
+/**
  * Fail unless a dataset has data rows. A file that is only its preamble and header — a
  * placeholder, an upload cut after the header — used to answer `[]` with exit 0, which
  * the docs define as "the filter matched nothing".
@@ -542,6 +559,19 @@ export class BundeswahlClient {
    * Wahlkreis number (leading zeros ignored) or name substring.
    */
   async structure(opts: { wahlkreis?: string | undefined; includeAggregates?: boolean | undefined } = {}): Promise<StructureRow[]> {
+    return (await this.structureTable(opts)).rows;
+  }
+
+  /**
+   * {@link structure}'s rows, and each column's number as the file's "Spalten-Nr." row gives it
+   * (column name -> number; the columns before the first number, Land, Wahlkreis-Nr. and
+   * Wahlkreis-Name, have none). The rows' `Fußnoten` name columns by these numbers ("In den
+   * Spalten 1, 7 bis 14 und 17 bis 48 sind die Werte für Berlin insgesamt ausgewiesen"), which
+   * the rows' keys don't carry. Empty when the file has no such row.
+   */
+  async structureTable(
+    opts: { wahlkreis?: string | undefined; includeAggregates?: boolean | undefined } = {},
+  ): Promise<{ columnNumbers: Record<string, number>; rows: StructureRow[] }> {
     assertValid("options", opts, knownKeysProblem(STRUCTURE_KEYS));
     const wahlkreis = textFilter("wahlkreis", opts.wahlkreis);
     // Checked like every other option: a string "false" (from an env variable or a query
@@ -596,6 +626,6 @@ export class BundeswahlClient {
         return nr === wNum || includesCi(name, w);
       });
     }
-    return rows;
+    return { columnNumbers: columnNumbers(parsed), rows };
   }
 }

@@ -67,7 +67,7 @@ For scripts and shared configs, pin a release and its digest from the
 |---|---|
 | `getElectionResult` | An area's result: turnout, valid and invalid votes, every party's votes and share with the change since 2021; in a Wahlkreis, the most first votes and who was elected. Ambiguous names list the candidates. |
 | `findWahlkreise` | Wahlkreise by name, Land or number, a page at a time. |
-| `getStructureData` | A Wahlkreis' structural data as published, with the footnote that says which values are city-wide; by its number also a Land's summary row (901–916) or Germany's (999), the published figures that a sum of Wahlkreise can't give. |
+| `getStructureData` | A Wahlkreis' structural data as published, with the footnote that says which values are city-wide and the column numbers it names them by; by its number also a Land's summary row (901–916) or Germany's (999), the published figures that a sum of Wahlkreise can't give. |
 | `listParties` | The parties and groups that stood, short and full names. |
 
 Every tool only reads. An answer is JSON (`structuredContent` and the same as text), with the

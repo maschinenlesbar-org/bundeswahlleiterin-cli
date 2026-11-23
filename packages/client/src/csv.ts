@@ -149,6 +149,11 @@ export interface ParsedCsv {
   header: string[];
   /** Data rows after the header, aligned to `header` by index. */
   rows: string[][];
+  /**
+   * The rows before the header (the human-readable preamble), when a header was found:
+   * the Strukturdaten file's last one numbers the columns ("Spalten-Nr.").
+   */
+  preamble?: string[][];
 }
 
 export interface ParseCsvOptions {
@@ -207,7 +212,7 @@ export function parseCsv(text: string, options: ParseCsvOptions = {}): ParsedCsv
 
   const header = all[headerIdx]!.map((c) => c.trim());
   const rows = all.slice(headerIdx + 1).filter((r) => r.some((c) => c.trim() !== ""));
-  return { header, rows };
+  return { header, rows, preamble: all.slice(0, headerIdx) };
 }
 
 /** A header name or cell as a message quotes it: cleaned of terminal controls, cut. */

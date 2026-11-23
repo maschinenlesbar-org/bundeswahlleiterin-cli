@@ -71,7 +71,9 @@ party with the most first votes. Candidate names are not in the data.
 **Strukturdaten.** **Structural data** per Wahlkreis — ~50 demographic and economic
 indicators (area, population, age structure, employment, …), published so results
 can be read in context. `structure` returns each Wahlkreis as a column→value map; its
-`Fußnoten` column notes where a column holds a city- or Kreis-wide value.
+`Fußnoten` column notes where a column holds a city- or Kreis-wide value, naming the
+columns by the numbers of the file's `Spalten-Nr.` row (the library's `structureTable()`
+and `getStructureData` give each column's number as `columnNumbers`).
 
 ## Data & format
 

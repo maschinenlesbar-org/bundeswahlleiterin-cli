@@ -102,3 +102,12 @@ test("getStructureData: a Land's (901-916) and the Bund's (999) summary rows by 
   assert.equal((await getStructureData(c, { wahlkreis: "212" }))?.level, "Wahlkreis");
   for (const none of ["902", "950", "300"]) assert.equal(await getStructureData(c, { wahlkreis: none }), undefined, none);
 });
+
+test("getStructureData: each value's column number, from the file's Spalten-Nr. row, which the footnote's columns name", async () => {
+  const data = await getStructureData(client(structureCsv), { wahlkreis: "212" });
+  assert.deepEqual(data?.columnNumbers, { "Fläche (km²)": 1, Bevölkerung: 2 });
+  // Without the Spalten-Nr. row the numbers are left out, never guessed.
+  const without = await getStructureData(client(structureCsv.replace("Spalten-Nr.;;;1;2\n", "")), { wahlkreis: "212" });
+  assert.equal(without?.columnNumbers, undefined);
+  assert.equal(without?.values["Bevölkerung"], "250,0");
+});

@@ -485,3 +485,10 @@ test("structure() refuses a file without every Wahlkreis 1-299 once, even when i
     );
   }
 });
+
+test("structureTable() gives the rows of structure() and each column's number from the Spalten-Nr. row", async () => {
+  const c = new BundeswahlClient({ transport: makeMockTransport(() => csvResponse(fx.structureCsv)).transport });
+  const table = await c.structureTable({ wahlkreis: "212" });
+  assert.deepEqual(table.columnNumbers, { "Fläche (km²)": 1, Bevölkerung: 2 });
+  assert.deepEqual(table.rows, await c.structure({ wahlkreis: "212" }));
+});

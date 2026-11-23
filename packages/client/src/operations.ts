@@ -6,7 +6,7 @@
 // - getStructureData: one Wahlkreis' structural data, with its footnote (bundeswahl-reference).
 
 import { fold, includesCi, textFilter, type BundeswahlClient } from "./client.js";
-import type { AreaType, ResultRow, StructureRow, Vote, Wahlkreis } from "./types.js";
+import type { AreaType, ResultRow, Vote, Wahlkreis } from "./types.js";
 
 /** One party's result in an area, for one ballot. */
 export interface PartyResult {
@@ -145,6 +145,12 @@ export interface StructureData {
    * value for the whole city, so those Wahlkreise can't be ranked against each other.
    */
   footnote?: string;
+  /**
+   * Each value's column number (column name -> number), as the file numbers its columns: the
+   * footnote names columns by these numbers ("In den Spalten 1, 7 bis 14 …"). Left out when
+   * the file has no "Spalten-Nr." row.
+   */
+  columnNumbers?: Record<string, number>;
 }
 
 /** The level of a Strukturdaten row by its number: 901–916 a Land's summary row, 999 the Bund's. */
@@ -161,7 +167,7 @@ function structureLevel(nr: string): AreaType {
 export async function getStructureData(client: BundeswahlClient, input: { wahlkreis: string }): Promise<StructureData | undefined> {
   const asked = input.wahlkreis.trim().replace(/^0+(?=\d)/, "");
   const summary = structureLevel(asked) !== "Wahlkreis";
-  const rows: StructureRow[] = await client.structure({ wahlkreis: input.wahlkreis, ...(summary ? { includeAggregates: true } : {}) });
+  const { rows, columnNumbers } = await client.structureTable({ wahlkreis: input.wahlkreis, ...(summary ? { includeAggregates: true } : {}) });
   const row = summary ? rows.find((r) => (r["Wahlkreis-Nr."] ?? "").replace(/^0+(?=\d)/, "") === asked) : rows[0];
   if (row === undefined) return undefined;
   const values = { ...row } as Record<string, string>;
@@ -173,5 +179,6 @@ export async function getStructureData(client: BundeswahlClient, input: { wahlkr
     level: structureLevel((values["Wahlkreis-Nr."] ?? "").replace(/^0+(?=\d)/, "")),
     values,
     ...(footnote ? { footnote } : {}),
+    ...(Object.keys(columnNumbers).length > 0 ? { columnNumbers } : {}),
   };
 }
