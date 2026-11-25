@@ -190,8 +190,11 @@ seconds, ms under 1 s). Tests: `packages/client/test/retry-hook.test.ts`, `apps/
 
 **Custom transports.** `timeoutMs` and `maxResponseBytes` hold for every transport, not
 only the built-in one: the engine races the call against its own deadline and passes an
-`AbortSignal` in `HttpRequest.signal` (hand it to `fetch(url, { signal })`), and it checks
-the size of the body it gets back. A transport may return its headers as a fetch `Headers`
+`AbortSignal` in `HttpRequest.signal` (hand it to `fetch(url, { signal })`) that fires then,
+with the engine's timeout error as its reason (the built-in transport stops with that reason, and
+for a signal some other caller aborted, the MCP server's tool call: its deadline, a cancellation,
+it says "Request aborted by its caller before it finished", never a timeout it didn't have), and
+it checks the size of the body it gets back. A transport may return its headers as a fetch `Headers`
 object, a `Map` or a record with names in any case (`Retry-After` is read from all of
 them), and its body as a `Buffer`, any ArrayBuffer view (fetch's `Uint8Array`) or an
 `ArrayBuffer`, from any realm. Whatever a transport throws or returns that isn't a
